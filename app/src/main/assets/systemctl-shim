@@ -1,0 +1,146 @@
+#!/bin/bash
+
+set -u
+
+prog=systemctl
+UNIT_DIRS="/etc/systemd/system /run/systemd/system /usr/lib/systemd/system /lib/systemd/system"
+
+ARGS=()
+for a in "$@"; do
+	case "$a" in
+	--system|--user|--quiet|-q|--no-pager|--no-ask-password|--no-block| \
+	--no-reload|--now|--global|--force|-f|--runtime|--root=*|--type=*| \
+	--state=*|--all|-a|--full|-l|--plain|--legend=*|--value|--property=*|-p)
+		;;
+	*)	ARGS+=("$a") ;;
+	esac
+done
+set -- "${ARGS[@]:-}"
+
+verb=${1:-help}
+[ $# -gt 0 ] && shift
+
+unit_file() {
+	local name=$1 d
+	case "$name" in
+	*.*)	;;
+	*)	name="$name.service" ;;
+	esac
+	for d in $UNIT_DIRS; do
+		[ -f "$d/$name" ] && { printf '%s\n' "$d/$name"; return 0; }
+	done
+	return 1
+}
+
+exec_start() {
+	sed -n 's/^ExecStart=//p' "$1" | head -n 1 | sed 's/^[-+!@]*//'
+}
+
+running() {
+	local file cmd
+	file=$(unit_file "$1") || return 1
+	cmd=$(exec_start "$file")
+	[ -n "$cmd" ] || return 1
+	pgrep -f "$(printf '%s' "$cmd" | awk '{print $1}')" >/dev/null 2>&1
+}
+
+start_unit() {
+	local name=$1 file cmd
+
+	if [ -x "/etc/init.d/${name%.service}" ]; then
+		"/etc/init.d/${name%.service}" start >/dev/null 2>&1 && return 0
+	fi
+
+	file=$(unit_file "$name") || {
+		printf '%s: no unit and no init script for %s\n' "$prog" "$name" >&2
+		return 1
+	}
+	cmd=$(exec_start "$file")
+	if [ -z "$cmd" ]; then
+		return 0
+	fi
+	running "$name" && return 0
+	setsid $cmd >/dev/null 2>&1 &
+	sleep 1
+	return 0
+}
+
+stop_unit() {
+	local name=$1 file cmd
+	if [ -x "/etc/init.d/${name%.service}" ]; then
+		"/etc/init.d/${name%.service}" stop >/dev/null 2>&1 && return 0
+	fi
+	file=$(unit_file "$name") || return 0
+	cmd=$(exec_start "$file")
+	[ -n "$cmd" ] || return 0
+	pkill -f "$(printf '%s' "$cmd" | awk '{print $1}')" >/dev/null 2>&1
+	return 0
+}
+
+case "$verb" in
+start)
+	rc=0
+	for u in "$@"; do start_unit "$u" || rc=1; done
+	exit $rc ;;
+stop)
+	for u in "$@"; do stop_unit "$u"; done
+	exit 0 ;;
+restart|reload-or-restart|try-restart|force-reload)
+	rc=0
+	for u in "$@"; do
+		stop_unit "$u"
+		start_unit "$u" || rc=1
+	done
+	exit $rc ;;
+reload)
+	exit 0 ;;
+is-active)
+	for u in "$@"; do
+		if running "$u"; then echo active; else echo inactive; exit 3; fi
+	done
+	exit 0 ;;
+is-enabled)
+	for u in "$@"; do unit_file "$u" >/dev/null 2>&1 || { echo disabled; exit 1; }; done
+	echo enabled
+	exit 0 ;;
+status)
+	rc=3
+	for u in "$@"; do
+		if running "$u"; then
+			printf '%s - active (running, started outside systemd)\n' "$u"
+			rc=0
+		else
+			printf '%s - inactive (dead)\n' "$u"
+		fi
+	done
+	exit $rc ;;
+enable|disable|mask|unmask|preset|preset-all|daemon-reload|daemon-reexec| \
+link|revert|set-default|reset-failed|add-wants|add-requires)
+	exit 0 ;;
+list-units|list-unit-files)
+	for d in $UNIT_DIRS; do
+		[ -d "$d" ] || continue
+		for f in "$d"/*.service; do
+			[ -f "$f" ] || continue
+			printf '%s\n' "${f##*/}"
+		done
+	done | sort -u
+	exit 0 ;;
+cat)
+	for u in "$@"; do
+		f=$(unit_file "$u") && { printf '# %s\n' "$f"; cat "$f"; }
+	done
+	exit 0 ;;
+--version|version)
+	echo "systemctl (stryker shim) -- no systemd on this guest"
+	exit 0 ;;
+poweroff|halt|reboot|exit)
+	sync
+	/sbin/halt -f >/dev/null 2>&1 || /sbin/poweroff -f >/dev/null 2>&1
+	exit 0 ;;
+help|--help|-h)
+	sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
+	exit 0 ;;
+*)
+	exit 0 ;;
+esac

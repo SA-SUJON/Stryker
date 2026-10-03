@@ -4,16 +4,20 @@
   <component name="GradleSettings">
     <option name="linkedExternalProjectsSettings">
       <GradleProjectSettings>
-        <option name="testRunner" value="GRADLE" />
-        <option name="distributionType" value="DEFAULT_WRAPPED" />
+        <option name="testRunner" value="CHOOSE_PER_TEST" />
         <option name="externalProjectPath" value="$PROJECT_DIR$" />
+        <option name="gradleJvm" value="jbr-17" />
         <option name="modules">
           <set>
             <option value="$PROJECT_DIR$" />
+            <option value="$PROJECT_DIR$/NeoLang" />
+            <option value="$PROJECT_DIR$/NeoTermBridge" />
+            <option value="$PROJECT_DIR$/Xorg" />
             <option value="$PROJECT_DIR$/app" />
+            <option value="$PROJECT_DIR$/chrome-tabs" />
+            <option value="$PROJECT_DIR$/terminal" />
           </set>
         </option>
-        <option name="resolveModulePerSourceSet" value="false" />
       </GradleProjectSettings>
     </option>
   </component>

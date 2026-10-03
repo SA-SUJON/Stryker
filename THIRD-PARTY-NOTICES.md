@@ -30,7 +30,7 @@ their licenses in the in-app *About → Open-source licenses* screen.
 | Asset | Origin | License | Notes |
 |---|---|---|---|
 | `busybox64` | [BusyBox](https://busybox.net) v1.36.1 (osm0sis build) | **GPL-2.0-only** | Shipped as a standalone executable, invoked via `exec` from shell scripts (mere aggregation / separate program). Not statically linked into app code. Corresponding source: busybox.net. |
-| `bash` | [GNU Bash](https://www.gnu.org/software/bash/) | **GPL-3.0-or-later** | |
+| `bash` | [GNU Bash](https://www.gnu.org/software/bash/) 5.2.37 | **GPL-3.0-or-later** | Unmodified upstream source, signature-checked against GNU's; built by `images/tools/build-bash.sh`, which records the exact flags. |
 | `sqlite3` | [SQLite](https://sqlite.org) 3.21.0 | **Public Domain** | |
 | `devices.txt` | [linux-usb.org `usb.ids`](http://www.linux-usb.org/usb-ids.html) | **GPL-2.0+ / BSD-3 (dual)** | USB vendor/product database. |
 | `checker.py` | CVE-2022-27255 PoC — [infobyte/cve-2022-27255](https://github.com/infobyte/cve-2022-27255) (© Martin Tartarelli, Octavio Gianatiempo) | upstream PoC | Attribution preserved in file header. |

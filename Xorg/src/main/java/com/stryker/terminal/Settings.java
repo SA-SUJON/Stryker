@@ -1,24 +1,3 @@
-/*
-Simple DirectMedia Layer
-Java source code (C) 2009-2014 Sergii Pylypenko
-
-This software is provided 'as-is', without any express or implied
-warranty.  In no event will the authors be held liable for any damages
-arising from the use of this software.
-
-Permission is granted to anyone to use this software for any purpose,
-including commercial applications, and to alter it and redistribute it
-freely, subject to the following restrictions:
-
-1. The origin of this software must not be misrepresented; you must not
-   claim that you wrote the original software. If you use this software
-   in a product, an acknowledgment in the product documentation would be
-   appreciated but is not required. 
-2. Altered source versions must be plainly marked as such, and must not be
-   misrepresented as being the original software.
-3. This notice may not be removed or altered from any source distribution.
-*/
-
 package com.stryker.terminal;
 
 import android.content.Context;
@@ -26,7 +5,6 @@ import android.os.Build;
 import android.os.Environment;
 import android.os.StatFs;
 import android.util.DisplayMetrics;
-import android.util.Log;
 import com.stryker.terminal.xorg.NeoXorgViewClient;
 import com.stryker.terminal.xorg.R;
 
@@ -34,6 +12,7 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.Locale;
 import java.util.zip.GZIPInputStream;
+import com.stryker.terminal.bridge.StrykerLog;
 
 
 @SuppressWarnings("JniMissingFunction")
@@ -155,7 +134,7 @@ public class Settings {
     {
       return;
     }
-    Log.i("SDL", "libSDL: Settings.Load(): enter");
+    StrykerLog.i("SDL", "libSDL: Settings.Load(): enter");
     nativeInitKeymap();
     for (int i = 0; i < SDL_Keys.JAVA_KEYCODE_LAST; i++) {
       int sdlKey = nativeGetKeymapKey(i);
@@ -210,7 +189,7 @@ public class Settings {
       Globals.ScreenKbControlsLayout[i][3] = Globals.ScreenKbControlsLayout[i][1] + wh;
     }
 
-    Log.i("SDL", "android.os.Build.MODEL: " + Build.MODEL);
+    StrykerLog.i("SDL", "android.os.Build.MODEL: " + Build.MODEL);
     convertButtonSizeFromOldSdlVersion = false;
 
     try {
@@ -321,17 +300,17 @@ public class Settings {
 
       settingsLoaded = true;
 
-      Log.i("SDL", "libSDL: Settings.Load(): loaded settings successfully");
+      StrykerLog.i("SDL", "libSDL: Settings.Load(): loaded settings successfully");
       settingsFile.close();
 
       return;
 
     } catch (FileNotFoundException e) {
-      Log.i("SDL", "libSDL: settings file not found: " + e);
+      StrykerLog.i("SDL", "libSDL: settings file not found: " + e);
     } catch (SecurityException e) {
-      Log.i("SDL", "libSDL: settings file cannot be opened: " + e);
+      StrykerLog.i("SDL", "libSDL: settings file cannot be opened: " + e);
     } catch (IOException e) {
-      Log.i("SDL", "libSDL: settings file cannot be read: " + e);
+      StrykerLog.i("SDL", "libSDL: settings file cannot be read: " + e);
       DeleteFilesOnUpgrade(p);
       if (convertButtonSizeFromOldSdlVersion && Globals.TouchscreenKeyboardSize + 1 < Globals.TOUCHSCREEN_KEYBOARD_CUSTOM) {
         Globals.TouchscreenKeyboardSize++;
@@ -341,7 +320,7 @@ public class Settings {
 
     if (Globals.DataDir.length() == 0) {
       if (!Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) {
-        Log.i("SDL", "libSDL: SD card or external storage is not mounted (state " + Environment.getExternalStorageState() + "), switching to the internal storage.");
+        StrykerLog.i("SDL", "libSDL: SD card or external storage is not mounted (state " + Environment.getExternalStorageState() + "), switching to the internal storage.");
         Globals.DownloadToSdcard = false;
       }
       Globals.DataDir = Globals.DownloadToSdcard ?
@@ -349,7 +328,7 @@ public class Settings {
         p.getContext().getFilesDir().getAbsolutePath();
     }
 
-    Log.i("SDL", "libSDL: Settings.Load(): loading settings failed, running config dialog");
+    StrykerLog.i("SDL", "libSDL: Settings.Load(): loading settings failed, running config dialog");
     p.initScreenOrientation();
   }
 
@@ -369,7 +348,7 @@ public class Settings {
 
   public static boolean deleteRecursivelyAndLog(File dir) {
     boolean success = true;
-    Log.v("SDL", "Deleting old file: " + dir.getAbsolutePath() + " exists " + dir.exists());
+    StrykerLog.v("SDL", "Deleting old file: " + dir.getAbsolutePath() + " exists " + dir.exists());
     if (dir.isDirectory()) {
       String[] children = dir.list();
       for (int i = 0; i < children.length; i++) {
@@ -496,7 +475,7 @@ public class Settings {
     String lang = Locale.getDefault().getLanguage();
     if (Locale.getDefault().getCountry().length() > 0)
       lang = lang + "_" + Locale.getDefault().getCountry();
-    Log.i("SDL", "libSDL: setting env LANGUAGE to '" + lang + "'");
+    StrykerLog.i("SDL", "libSDL: setting env LANGUAGE to '" + lang + "'");
     nativeSetEnv("LANG", lang);
     nativeSetEnv("LANGUAGE", lang);
     nativeSetEnv("APPDIR", p.getContext().getFilesDir().getAbsolutePath());
@@ -519,7 +498,7 @@ public class Settings {
       nativeSetEnv("ANDROID_APP_NAME", p.getContext().getString(p.getContext().getApplicationInfo().labelRes));
     } catch (Exception eeeeee) {
     }
-    Log.d("SDL", "libSDL: Is running on OUYA: " + p.isRunningOnOUYA());
+    StrykerLog.d("SDL", "libSDL: Is running on OUYA: " + p.isRunningOnOUYA());
     if (p.isRunningOnOUYA()) {
       nativeSetEnv("OUYA", "1");
       nativeSetEnv("TV", "1");
@@ -729,7 +708,7 @@ public class Settings {
         Globals.VideoDepthBpp = value;
         break;
       default:
-        Log.e("SDL", "setConfigOptionFromSDL: cannot find option with ID " + option + ", value " + value);
+        StrykerLog.e("SDL", "setConfigOptionFromSDL: cannot find option with ID " + option + ", value " + value);
         break;
     }
     Save(MainActivity.instance);

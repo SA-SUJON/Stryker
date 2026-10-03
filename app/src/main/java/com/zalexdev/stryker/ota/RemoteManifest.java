@@ -54,13 +54,22 @@ public final class RemoteManifest {
         public final Asset initrd;
         public final Asset libslirp;
         public final Asset rootfs;
+        public final Asset umlKernel;
+        public final Asset umlStub;
 
         RootlessAssets(Asset qemu, Asset kernel, Asset initrd, Asset libslirp, Asset rootfs) {
+            this(qemu, kernel, initrd, libslirp, rootfs, null, null);
+        }
+
+        RootlessAssets(Asset qemu, Asset kernel, Asset initrd, Asset libslirp, Asset rootfs,
+                       Asset umlKernel, Asset umlStub) {
             this.qemu = qemu;
             this.kernel = kernel;
             this.initrd = initrd;
             this.libslirp = libslirp;
             this.rootfs = rootfs;
+            this.umlKernel = umlKernel;
+            this.umlStub = umlStub;
         }
 
         public boolean isComplete() {
@@ -69,6 +78,10 @@ public final class RemoteManifest {
                     && initrd != null && initrd.isUsable()
                     && libslirp != null && libslirp.isUsable()
                     && rootfs != null && rootfs.isUsable();
+        }
+
+        public boolean isCompleteForUml() {
+            return rootfs != null && rootfs.isUsable();
         }
     }
 
@@ -88,6 +101,8 @@ public final class RemoteManifest {
 
     public int manifestVersion = 1;
     public String coreVersion = "";
+    public String rootlessVersion = "";
+    public String kernelRelease = "";
     public Asset chroot64;
     public RootlessAssets rootless;
     public AppUpdate app;
@@ -101,12 +116,7 @@ public final class RemoteManifest {
 
         JSONObject core = root.optJSONObject("core");
         if (core != null) {
-            // core.chroot64 / core.chroot32 are the legacy Alpine tarballs. Builds below 6 are
-            // already published and read those keys directly, so they can never be repointed.
-            // This build takes its rootfs only from core.debian, and never falls back to the
-            // legacy keys — installing an Alpine tarball into a Debian layout would be worse
-            // than failing.
-            JSONObject debian = core.optJSONObject("debian");
+            JSONObject debian = pickForThisBuild(core, "debian_v2", "debian");
             if (debian != null
                     && com.zalexdev.stryker.BuildConfig.VERSION_CODE
                        >= debian.optInt("min_version_code", 0)) {
@@ -118,14 +128,18 @@ public final class RemoteManifest {
             }
         }
 
-        JSONObject rootless = root.optJSONObject("rootless");
+        JSONObject rootless = pickForThisBuild(root, "rootless_v2", "rootless");
         if (rootless != null) {
+            manifest.rootlessVersion = rootless.optString("version", "");
+            manifest.kernelRelease = rootless.optString("kernel_release", "");
             manifest.rootless = new RootlessAssets(
                     asset(rootless.optJSONObject("qemu")),
                     asset(rootless.optJSONObject("kernel")),
                     asset(rootless.optJSONObject("initrd")),
                     asset(rootless.optJSONObject("libslirp")),
-                    asset(rootless.optJSONObject("rootfs")));
+                    asset(rootless.optJSONObject("rootfs")),
+                    asset(rootless.optJSONObject("uml_kernel")),
+                    asset(rootless.optJSONObject("uml_stub")));
         }
 
         JSONObject app = root.optJSONObject("app");
@@ -176,6 +190,15 @@ public final class RemoteManifest {
             }
         }
         return manifest;
+    }
+
+    private static JSONObject pickForThisBuild(JSONObject parent, String preferred, String fallback) {
+        JSONObject p = parent.optJSONObject(preferred);
+        if (p != null
+                && com.zalexdev.stryker.BuildConfig.VERSION_CODE >= p.optInt("min_version_code", 0)) {
+            return p;
+        }
+        return parent.optJSONObject(fallback);
     }
 
     private static Asset asset(JSONObject o) {

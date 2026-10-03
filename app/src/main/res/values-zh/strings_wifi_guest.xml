@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="wifi_nodriver_title">内核无法驱动此网卡</string>
+    <string name="wifi_nodriver_body">%1$s 已插入。Android 内核没有它的驱动，也无法添加。\n\nStryker 可以在自带驱动的 Linux 客户机中运行 Wi-Fi。其余功能仍使用 root。</string>
+    <string name="wifi_nodriver_setup">设置</string>
+    <string name="wifi_nodriver_later">以后再说</string>
+
+    <string name="wifi_nodriver_state_title">此网卡没有驱动</string>
+    <string name="wifi_nodriver_state_body">Android 内核不驱动 %1$s。改在自带驱动的客户机中运行 Wi-Fi。</string>
+    <string name="wifi_nodriver_state_action">设置客户机</string>
+    <string name="wifi_nodriver_state_status">无驱动</string>
+
+    <string name="wifi_guest_title">在客户机中运行 Wi-Fi</string>
+    <string name="wifi_guest_subtitle">其余功能仍使用 root</string>
+    <string name="wifi_guest_start">开始</string>
+    <string name="wifi_guest_retry">重试</string>
+    <string name="wifi_guest_done">完成</string>
+    <string name="wifi_guest_cancel">取消</string>
+    <string name="wifi_guest_close">关闭</string>
+
+    <string name="wifi_guest_step_adapter">网卡</string>
+    <string name="wifi_guest_step_device">设备</string>
+    <string name="wifi_guest_step_engine">引擎</string>
+    <string name="wifi_guest_step_files">文件</string>
+    <string name="wifi_guest_step_boot">启动</string>
+    <string name="wifi_guest_step_passthrough">移交</string>
+    <string name="wifi_guest_step_interface">无线电</string>
+
+    <string name="wifi_guest_running_warning">需下载约 500 MB，耗时几分钟。请保持应用打开。</string>
+
+    <string name="wifi_guest_active_meta">%1$s · 客户机</string>
+    <string name="wifi_guest_settings_title">Wi-Fi 引擎</string>
+    <string name="wifi_guest_settings_on">%1$s · 手机内核没有驱动</string>
+    <string name="wifi_guest_turn_off">关闭</string>
+    <string name="wifi_guest_turn_off_body">Wi-Fi 改回手机内核。在重新设置之前，该网卡将无法使用。</string>
+
+    <string name="wifi_guest_down_title">客户机未运行</string>
+    <string name="wifi_guest_down_body">此手机的 Wi-Fi 在客户机中运行，但它没有启动。请重试，或查看虚拟机日志。</string>
+
+    <string name="wifi_guest_adapter_changed_title">网卡已更换</string>
+    <string name="wifi_guest_adapter_changed_body">Wi-Fi 是为 %1$s 设置的。现在插入的是 %2$s，客户机可能没有它的驱动。</string>
+    <string name="wifi_guest_adapter_changed_action">检查</string>
+
+    <string name="wg_looking">正在查找</string>
+    <string name="wg_checking">正在检查</string>
+    <string name="wg_no_adapter">未插入网卡</string>
+    <string name="wg_no_adapter_body">插入网卡后重新开始。</string>
+    <string name="wg_not_arm64">非 arm64</string>
+    <string name="wg_not_arm64_body">客户机需要 64 位 ARM 手机。此设备无法运行。</string>
+    <string name="wg_low_space">剩余 %1$s</string>
+    <string name="wg_low_space_body">释放出 %1$s 后重新开始。</string>
+    <string name="wg_device_ok">arm64 · 剩余 %1$s</string>
+    <string name="wg_device_ok_short">arm64</string>
+    <string name="wg_choosing">正在选择</string>
+    <string name="wg_probing">正在测试轻量内核</string>
+    <string name="wg_engine_installed">%1$s · 已安装</string>
+    <string name="wg_downloading">正在下载</string>
+    <string name="wg_offline">无网络连接</string>
+    <string name="wg_offline_body">客户机需从 GitHub 下载。请连接网络后重新开始。</string>
+    <string name="wg_install_failed">安装失败</string>
+    <string name="wg_check_log">查看日志后重新开始。</string>
+    <string name="wg_missing">缺少：%1$s</string>
+    <string name="wg_missing_body">安装已结束，但所需文件并不齐全。</string>
+    <string name="wg_files_ready">就绪</string>
+    <string name="wg_booting">正在启动 · 首次较慢</string>
+    <string name="wg_boot_failed">未能启动</string>
+    <string name="wg_boot_ok">%1$s 已启动</string>
+    <string name="wg_usb_asking">正在请求 USB 权限</string>
+    <string name="wg_usb_failed">未移交</string>
+    <string name="wg_usb_failed_body">手机请求时请授予 USB 权限，然后重新开始。</string>
+    <string name="wg_iface_waiting">正在等待驱动</string>
+    <string name="wg_iface_failed">客户机中没有无线电</string>
+    <string name="wg_iface_failed_body">客户机内核也没有此网卡的驱动。请查看日志。</string>
+    <string name="wg_done_body">Wi-Fi 在 %1$s 中运行。其余功能仍使用 root。</string>
+    <string name="wg_cancelling">正在停止</string>
+    <string name="wg_cancelled">已取消</string>
+    <string name="wg_unexpected">意外失败</string>
+    <string name="wg_unexpected_body">设置已停止：%1$s</string>
+
+</resources>

@@ -34,7 +34,6 @@
             android:textColor="@color/grey"
             android:textSize="14sp" />
 
-        <!-- ====== DEVICE ====== -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -87,7 +86,6 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- ====== RESOURCES ====== -->
         <com.google.android.material.textview.MaterialTextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -116,7 +114,6 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
-                <!-- Disk -->
                 <LinearLayout
                     android:id="@+id/vm_disk_row"
                     style="@style/VmRow">
@@ -146,7 +143,6 @@
 
                 <View style="@style/VmDivider" />
 
-                <!-- CPU -->
                 <LinearLayout
                     android:id="@+id/vm_cpu_row"
                     style="@style/VmRow">
@@ -176,7 +172,6 @@
 
                 <View style="@style/VmDivider" />
 
-                <!-- RAM -->
                 <LinearLayout
                     android:id="@+id/vm_ram_row"
                     style="@style/VmRow">
@@ -206,7 +201,6 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- ====== AUTO-TUNE ====== -->
         <com.google.android.material.textview.MaterialTextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -294,7 +288,6 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- ====== EXPERIMENTS ====== -->
         <com.google.android.material.textview.MaterialTextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -332,7 +325,6 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
-                <!-- Disk cache mode -->
                 <LinearLayout
                     android:id="@+id/vm_cache_row"
                     style="@style/VmRow">
@@ -361,7 +353,6 @@
 
                 <View style="@style/VmDivider" />
 
-                <!-- AIO backend -->
                 <LinearLayout
                     android:id="@+id/vm_aio_row"
                     style="@style/VmRow">
@@ -390,7 +381,37 @@
 
                 <View style="@style/VmDivider" />
 
-                <!-- MTTCG -->
+                <LinearLayout
+                    android:id="@+id/vm_uml_row"
+                    style="@style/VmRow">
+
+                    <ImageView
+                        style="@style/VmRowIcon"
+                        android:src="@drawable/ic_cpu"
+                        app:tint="#5E35B1" />
+
+                    <LinearLayout style="@style/VmRowText">
+
+                        <com.google.android.material.textview.MaterialTextView
+                            style="@style/VmRowTitle"
+                            android:text="@string/vm_uml_title" />
+
+                        <com.google.android.material.textview.MaterialTextView
+                            android:id="@+id/vm_uml_sub"
+                            style="@style/VmRowSub"
+                            android:text="@string/vm_uml_subtitle" />
+                    </LinearLayout>
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/vm_uml_switch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:clickable="false"
+                        android:focusable="false" />
+                </LinearLayout>
+
+                <View style="@style/VmDivider" />
+
                 <LinearLayout
                     android:id="@+id/vm_mttcg_row"
                     style="@style/VmRow">
@@ -421,7 +442,6 @@
 
                 <View style="@style/VmDivider" />
 
-                <!-- Disable RNG -->
                 <LinearLayout
                     android:id="@+id/vm_norng_row"
                     style="@style/VmRow">
@@ -452,7 +472,6 @@
 
                 <View style="@style/VmDivider" />
 
-                <!-- Disable share -->
                 <LinearLayout
                     android:id="@+id/vm_noshare_row"
                     style="@style/VmRow">
@@ -483,7 +502,6 @@
 
                 <View style="@style/VmDivider" />
 
-                <!-- Pointer authentication -->
                 <LinearLayout
                     android:id="@+id/vm_pauth_row"
                     style="@style/VmRow">
@@ -512,7 +530,6 @@
 
                 <View style="@style/VmDivider" />
 
-                <!-- Block I/O thread -->
                 <LinearLayout
                     android:id="@+id/vm_iothread_row"
                     style="@style/VmRow">
@@ -543,7 +560,6 @@
 
                 <View style="@style/VmDivider" />
 
-                <!-- Guest fast-boot cmdline -->
                 <LinearLayout
                     android:id="@+id/vm_fastboot_row"
                     style="@style/VmRow">

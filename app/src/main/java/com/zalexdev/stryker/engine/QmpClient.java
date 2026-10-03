@@ -2,7 +2,6 @@ package com.zalexdev.stryker.engine;
 
 import android.net.LocalSocket;
 import android.net.LocalSocketAddress;
-import android.util.Log;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -13,6 +12,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import com.stryker.terminal.bridge.StrykerLog;
 
 public final class QmpClient {
 
@@ -40,7 +40,7 @@ public final class QmpClient {
             readReturn();
             return true;
         } catch (Exception e) {
-            Log.w(TAG, "connect failed: " + e.getMessage());
+            StrykerLog.w(TAG, "connect failed: " + e.getMessage());
             close();
             return false;
         }
@@ -60,7 +60,7 @@ public final class QmpClient {
                 return ret.getJSONObject("return").optInt("fdset-id", -1);
             }
         } catch (Exception e) {
-            Log.w(TAG, "addFd failed: " + e.getMessage());
+            StrykerLog.w(TAG, "addFd failed: " + e.getMessage());
         }
         return -1;
     }
@@ -77,7 +77,7 @@ public final class QmpClient {
             writeRaw(cmd.toString(), null);
             return readReturn() != null;
         } catch (Exception e) {
-            Log.w(TAG, "deviceAdd failed: " + e.getMessage());
+            StrykerLog.w(TAG, "deviceAdd failed: " + e.getMessage());
             return false;
         }
     }
@@ -123,7 +123,7 @@ public final class QmpClient {
             writeRaw(cmd.toString(), null);
             return readReturn();
         } catch (Exception e) {
-            Log.w(TAG, command + " failed: " + e.getMessage());
+            StrykerLog.w(TAG, command + " failed: " + e.getMessage());
             return null;
         }
     }
@@ -147,12 +147,12 @@ public final class QmpClient {
                 try { o = new JSONObject(line); } catch (JSONException e) { continue; }
                 if (o.has("return")) return o;
                 if (o.has("error")) {
-                    Log.w(TAG, "QMP error: " + o.optJSONObject("error"));
+                    StrykerLog.w(TAG, "QMP error: " + o.optJSONObject("error"));
                     return null;
                 }
             }
         } catch (IOException e) {
-            Log.w(TAG, "readReturn: " + e.getMessage());
+            StrykerLog.w(TAG, "readReturn: " + e.getMessage());
         }
         return null;
     }

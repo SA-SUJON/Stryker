@@ -64,6 +64,11 @@ public class BruteHandshake extends AsyncTask<Void, String, WiFINetwork> {
 
     }
 
+    private String guestCapture() {
+        if (path != null && path.startsWith("/")) return path;
+        return core.guestShare() + "/captured/" + path;
+    }
+
     @SuppressLint("WrongThread")
     @Override
     protected WiFINetwork doInBackground(Void... command) {
@@ -72,9 +77,8 @@ public class BruteHandshake extends AsyncTask<Void, String, WiFINetwork> {
         logger.writeLine("Starting brute handshake",1);
         try {
             if (core.isRootless()) {
-                String guestCmd = "aircrack-ng -w/sdcard/Stryker/wordlists/" + wordlist
-                        + " /sdcard/Stryker/captured/" + path + " ";
-                guestSession = core.rootless().openStream(guestCmd);
+                String guestCmd = "aircrack-ng -w " + wordlist + " " + guestCapture() + " ";
+                guestSession = core.guest().openStream(guestCmd);
                 BufferedReader gbr = guestSession.reader;
                 while ((line = gbr.readLine()) != null) {
                     if (line.startsWith(GuestExec.Session.SENTINEL)) break;
@@ -98,7 +102,7 @@ public class BruteHandshake extends AsyncTask<Void, String, WiFINetwork> {
             OutputStream stdin = process.getOutputStream();
             InputStream stderr = process.getErrorStream();
             InputStream stdout = process.getInputStream();
-            stdin.write((exec + "'aircrack-ng -w/sdcard/Stryker/wordlists/" + wordlist + " /sdcard/Stryker/captured/" + path + " '" + '\n').getBytes());
+            stdin.write((exec + "'aircrack-ng -w " + wordlist + " " + guestCapture() + " '" + '\n').getBytes());
             stdin.flush();
             stdin.close();
 

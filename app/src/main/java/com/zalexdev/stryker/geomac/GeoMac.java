@@ -347,7 +347,7 @@ public class GeoMac extends Fragment {
                     });
                     return;
                 }
-                out = json ? GeoExporter.exportJson(all) : GeoExporter.exportKml(all);
+                out = json ? GeoExporter.exportJson(core, all) : GeoExporter.exportKml(core, all);
             } catch (Exception e) {
                 if (activity == null || !isAdded() || !alive.get()) return;
                 activity.runOnUiThread(() -> {
@@ -371,11 +371,12 @@ public class GeoMac extends Fragment {
     }
 
     private void openImportPicker() {
-        List<File> files = GeoExporter.listJsonExports();
+        List<File> files = GeoExporter.listJsonExports(core);
         if (files.isEmpty()) {
             new MaterialAlertDialogBuilder(context)
                     .setTitle(R.string.geomac_import_title)
-                    .setMessage(getString(R.string.geomac_import_empty, GeoExporter.DIR_PATH))
+                    .setMessage(getString(R.string.geomac_import_empty,
+                            GeoExporter.dir(core).getAbsolutePath()))
                     .setPositiveButton(android.R.string.ok, null)
                     .show();
             return;

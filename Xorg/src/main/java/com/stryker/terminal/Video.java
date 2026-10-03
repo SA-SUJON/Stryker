@@ -1,24 +1,3 @@
-/*
-Simple DirectMedia Layer
-Java source code (C) 2009-2014 Sergii Pylypenko
-
-This software is provided 'as-is', without any express or implied
-warranty.  In no event will the authors be held liable for any damages
-arising from the use of this software.
-
-Permission is granted to anyone to use this software for any purpose,
-including commercial applications, and to alter it and redistribute it
-freely, subject to the following restrictions:
-
-1. The origin of this software must not be misrepresented; you must not
-   claim that you wrote the original software. If you use this software
-   in a product, an acknowledgment in the product documentation would be
-   appreciated but is not required. 
-2. Altered source versions must be plainly marked as such, and must not be
-   misrepresented as being the original software.
-3. This notice may not be removed or altered from any source distribution.
-*/
-
 package com.stryker.terminal;
 
 import android.content.Context;
@@ -27,7 +6,6 @@ import android.hardware.input.InputManager;
 import android.net.Uri;
 import android.os.Build;
 import android.util.DisplayMetrics;
-import android.util.Log;
 import android.view.*;
 import android.widget.Toast;
 import com.stryker.terminal.xorg.NeoXorgViewClient;
@@ -35,6 +13,7 @@ import com.stryker.terminal.xorg.NeoXorgViewClient;
 import javax.microedition.khronos.egl.*;
 import javax.microedition.khronos.opengles.GL10;
 import java.lang.reflect.Method;
+import com.stryker.terminal.bridge.StrykerLog;
 
 
 class Mouse {
@@ -90,10 +69,10 @@ abstract class DifferentTouchInput {
         multiTouchAvailable2 = true;
     }
     try {
-      Log.i("SDL", "Device: " + Build.DEVICE);
-      Log.i("SDL", "Device name: " + Build.DISPLAY);
-      Log.i("SDL", "Device model: " + Build.MODEL);
-      Log.i("SDL", "Device board: " + Build.BOARD);
+      StrykerLog.i("SDL", "Device: " + Build.DEVICE);
+      StrykerLog.i("SDL", "Device name: " + Build.DISPLAY);
+      StrykerLog.i("SDL", "Device model: " + Build.MODEL);
+      StrykerLog.i("SDL", "Device board: " + Build.BOARD);
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
         return AutoDetectTouchInput.Holder.sInstance;
       }
@@ -392,10 +371,10 @@ abstract class DifferentTouchInput {
           tapY = event.getY();
           tapTime = System.currentTimeMillis();
           if (hover)
-            Log.i("SDL", "Tap tapX " + event.getX() + " tapY " + event.getX());
+            StrykerLog.i("SDL", "Tap tapX " + event.getX() + " tapY " + event.getX());
         } else if (hover && System.currentTimeMillis() < hoverTime + 1000) {
           hoverTouchDistance += Math.abs(hoverX - event.getX()) + Math.abs(hoverY - event.getY());
-          Log.i("SDL", "Finger down event.getX() " + event.getX() + " hoverX " + hoverX + " event.getY() " + event.getY() + " hoverY " + hoverY + " hoverTouchDistance " + hoverTouchDistance);
+          StrykerLog.i("SDL", "Finger down event.getX() " + event.getX() + " hoverX " + hoverX + " event.getY() " + event.getY() + " hoverY " + hoverY + " hoverTouchDistance " + hoverTouchDistance);
         }
       }
       if (tapCount >= 4) {
@@ -406,7 +385,7 @@ abstract class DifferentTouchInput {
           displayHeight = Math.min(dm.widthPixels, dm.heightPixels);
         } catch (Exception eeeee) {
         }
-        Log.i("SDL", "AutoDetectTouchInput: hoverTouchDistance " + hoverTouchDistance + " threshold " + displayHeight / 2 + " hover " + hover + " fingerHover " + fingerHover);
+        StrykerLog.i("SDL", "AutoDetectTouchInput: hoverTouchDistance " + hoverTouchDistance + " threshold " + displayHeight / 2 + " hover " + hover + " fingerHover " + fingerHover);
         if (hoverTouchDistance > displayHeight / 2) {
           if (Globals.AppUsesMouse)
             Toast.makeText(MainActivity.instance, "Detected buggy touch panel, enabling workarounds", Toast.LENGTH_SHORT).show();
@@ -446,7 +425,7 @@ abstract class DifferentTouchInput {
         if (tap && System.currentTimeMillis() < tapTime + 1000) {
           tap = false;
           hoverTouchDistance += Math.abs(tapX - hoverX) + Math.abs(tapY - hoverY);
-          Log.i("SDL", "Hover hoverX " + hoverX + " tapX " + tapX + " hoverY " + hoverX + " tapY " + tapY + " hoverTouchDistance " + hoverTouchDistance);
+          StrykerLog.i("SDL", "Hover hoverX " + hoverX + " tapX " + tapX + " hoverY " + hoverX + " tapY " + tapY + " hoverTouchDistance " + hoverTouchDistance);
         }
       }
     }
@@ -469,7 +448,7 @@ abstract class DifferentTouchInput {
     }
     for (int i = 0; i < gamepadIds.length; i++) {
       if (gamepadIds[i] == 0) {
-        Log.i("SDL", "libSDL: gamepad added: deviceId " + deviceId + " gamepadId " + (i + 1));
+        StrykerLog.i("SDL", "libSDL: gamepad added: deviceId " + deviceId + " gamepadId " + (i + 1));
         gamepadIds[i] = deviceId;
         return i + 1;
       }
@@ -499,7 +478,7 @@ abstract class DifferentTouchInput {
       public void onInputDeviceRemoved(int deviceId) {
         for (int i = 0; i < gamepadIds.length; i++) {
           if (gamepadIds[i] == deviceId) {
-            Log.i("SDL", "libSDL: gamepad removed: deviceId " + deviceId + " gamepadId " + (i + 1));
+            StrykerLog.i("SDL", "libSDL: gamepad removed: deviceId " + deviceId + " gamepadId " + (i + 1));
             gamepadIds[i] = 0;
           }
         }
@@ -525,7 +504,7 @@ class DemoRenderer extends GLSurfaceView_SDL.Renderer {
   }
 
   public void onSurfaceCreated(GL10 gl, EGLConfig config) {
-    Log.i("SDL", "libSDL: DemoRenderer.onSurfaceCreated(): paused " + mPaused + " mFirstTimeStart " + mFirstTimeStart);
+    StrykerLog.i("SDL", "libSDL: DemoRenderer.onSurfaceCreated(): paused " + mPaused + " mFirstTimeStart " + mFirstTimeStart);
     mGlSurfaceCreated = true;
     mGl = gl;
     if (!mPaused && !mFirstTimeStart)
@@ -534,7 +513,7 @@ class DemoRenderer extends GLSurfaceView_SDL.Renderer {
   }
 
   public void onSurfaceChanged(GL10 gl, int w, int h) {
-    Log.i("SDL", "libSDL: DemoRenderer.onSurfaceChanged(): paused " + mPaused + " mFirstTimeStart " + mFirstTimeStart + " w " + w + " h " + h);
+    StrykerLog.i("SDL", "libSDL: DemoRenderer.onSurfaceChanged(): paused " + mPaused + " mFirstTimeStart " + mFirstTimeStart + " w " + w + " h " + h);
     if (w < h && Globals.HorizontalOrientation) {
       int x = w;
       w = h;
@@ -551,7 +530,7 @@ class DemoRenderer extends GLSurfaceView_SDL.Renderer {
   public void onWindowResize(final int w, final int h) {
     if (mClient.isRunningOnOUYA())
       return;
-    Log.d("SDL", "libSDL: DemoRenderer.onWindowResize(): " + w + "x" + h);
+    StrykerLog.d("SDL", "libSDL: DemoRenderer.onWindowResize(): " + w + "x" + h);
     mLastPendingResize++;
     final int resizeThreadIndex = mLastPendingResize;
     mClient.getGLView().postDelayed(new Runnable() {
@@ -569,24 +548,24 @@ class DemoRenderer extends GLSurfaceView_SDL.Renderer {
         Display display = mClient.getWindowManager().getDefaultDisplay();
 
         if (mWidth != 0 && mHeight != 0 && (mWidth != ww || mHeight != hh)) {
-          Log.i("SDL", "libSDL: DemoRenderer.onWindowResize(): screen size changed from " + mWidth + "x" + mHeight + " to " + ww + "x" + hh);
+          StrykerLog.i("SDL", "libSDL: DemoRenderer.onWindowResize(): screen size changed from " + mWidth + "x" + mHeight + " to " + ww + "x" + hh);
           if (Globals.SwVideoMode &&
             (Math.abs(display.getWidth() - ww) > display.getWidth() / 10 ||
               Math.abs(display.getHeight() - hh) > display.getHeight() / 10)) {
-            Log.i("SDL", "Multiwindow detected - enabling screen orientation autodetection");
+            StrykerLog.i("SDL", "Multiwindow detected - enabling screen orientation autodetection");
             Globals.AutoDetectOrientation = true;
             mClient.initScreenOrientation();
             DemoRenderer.super.ResetVideoSurface();
             DemoRenderer.super.onWindowResize(ww, hh);
           } else {
-            Log.i("SDL", "System button bar hidden - re-init video to avoid black bar at the top");
+            StrykerLog.i("SDL", "System button bar hidden - re-init video to avoid black bar at the top");
             DemoRenderer.super.ResetVideoSurface();
             DemoRenderer.super.onWindowResize(ww, hh);
           }
         }
         if (mWidth == 0 && mHeight == 0) {
           if ((ww > hh) != (display.getWidth() > display.getHeight())) {
-            Log.i("SDL", "Multiwindow detected - app window size " + ww + "x" + hh + " but display dimensions are " + display.getWidth() + "x" + display.getHeight());
+            StrykerLog.i("SDL", "Multiwindow detected - app window size " + ww + "x" + hh + " but display dimensions are " + display.getWidth() + "x" + display.getHeight());
             Globals.AutoDetectOrientation = true;
           }
         }
@@ -597,7 +576,7 @@ class DemoRenderer extends GLSurfaceView_SDL.Renderer {
   }
 
   public void onSurfaceDestroyed() {
-    Log.i("SDL", "libSDL: DemoRenderer.onSurfaceDestroyed(): paused " + mPaused + " mFirstTimeStart " + mFirstTimeStart);
+    StrykerLog.i("SDL", "libSDL: DemoRenderer.onSurfaceDestroyed(): paused " + mPaused + " mFirstTimeStart " + mFirstTimeStart);
     mGlSurfaceCreated = false;
     mGlContextLost = true;
     nativeGlContextLost();
@@ -775,7 +754,7 @@ class DemoRenderer extends GLSurfaceView_SDL.Renderer {
       }
       mClient.getContext().startActivity(i);
     } catch (Exception e) {
-      Log.i("SDL", "libSDL: cannot start external app: " + e.toString());
+      StrykerLog.i("SDL", "libSDL: cannot start external app: " + e.toString());
     }
   }
 
@@ -923,7 +902,7 @@ class DemoGLSurfaceView extends GLSurfaceView_SDL {
         try {
           mRenderer.wait(300L);
         } catch (InterruptedException e) {
-          Log.v("SDL", "DemoGLSurfaceView::limitEventRate(): Who dared to interrupt my slumber?");
+          StrykerLog.v("SDL", "DemoGLSurfaceView::limitEventRate(): Who dared to interrupt my slumber?");
           Thread.interrupted();
         }
       }
@@ -938,7 +917,7 @@ class DemoGLSurfaceView extends GLSurfaceView_SDL {
 
   @Override
   public void onPause() {
-    Log.i("SDL", "libSDL: DemoGLSurfaceView.onPause(): mRenderer.mGlSurfaceCreated " + mRenderer.mGlSurfaceCreated + " mRenderer.mPaused " + mRenderer.mPaused + (mRenderer.mPaused ? " - not doing anything" : ""));
+    StrykerLog.i("SDL", "libSDL: DemoGLSurfaceView.onPause(): mRenderer.mGlSurfaceCreated " + mRenderer.mGlSurfaceCreated + " mRenderer.mPaused " + mRenderer.mPaused + (mRenderer.mPaused ? " - not doing anything" : ""));
     if (mRenderer.mPaused)
       return;
     mRenderer.mPaused = true;
@@ -956,7 +935,7 @@ class DemoGLSurfaceView extends GLSurfaceView_SDL {
 
   @Override
   public void onResume() {
-    Log.i("SDL", "libSDL: DemoGLSurfaceView.onResume(): mRenderer.mGlSurfaceCreated " + mRenderer.mGlSurfaceCreated + " mRenderer.mPaused " + mRenderer.mPaused + (!mRenderer.mPaused ? " - not doing anything" : ""));
+    StrykerLog.i("SDL", "libSDL: DemoGLSurfaceView.onResume(): mRenderer.mGlSurfaceCreated " + mRenderer.mGlSurfaceCreated + " mRenderer.mPaused " + mRenderer.mPaused + (!mRenderer.mPaused ? " - not doing anything" : ""));
     if (!mRenderer.mPaused)
       return;
     mRenderer.mPaused = false;

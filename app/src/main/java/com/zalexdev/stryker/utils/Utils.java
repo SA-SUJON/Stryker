@@ -12,6 +12,7 @@ import android.graphics.PorterDuffXfermode;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
+import android.app.Activity;
 import android.os.Build;
 import android.text.Layout;
 import android.text.Spannable;
@@ -28,6 +29,9 @@ import android.widget.RelativeLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 
 import com.zalexdev.stryker.R;
 
@@ -37,11 +41,21 @@ import java.util.regex.Pattern;
 public class Utils {
 
     public static int setPendingIntentFlag() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            return FLAG_IMMUTABLE;
-        } else {
-            return FLAG_UPDATE_CURRENT;
-        }
+        return FLAG_UPDATE_CURRENT | FLAG_IMMUTABLE;
+    }
+
+    public static void applySystemBarInsets(Activity activity) {
+        if (activity == null) return;
+        final View content = activity.findViewById(android.R.id.content);
+        if (content == null) return;
+        ViewCompat.setOnApplyWindowInsetsListener(content, (v, insets) -> {
+            Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars()
+                    | WindowInsetsCompat.Type.displayCutout()
+                    | WindowInsetsCompat.Type.ime());
+            v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+            return WindowInsetsCompat.CONSUMED;
+        });
+        ViewCompat.requestApplyInsets(content);
     }
 
     public static String matchString(String regex, String string, int group) {

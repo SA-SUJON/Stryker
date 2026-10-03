@@ -20,18 +20,17 @@ import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.viewpager2.widget.ViewPager2;
 
-import com.google.android.material.button.MaterialButton;
-import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.progressindicator.LinearProgressIndicator;
 import com.zalexdev.stryker.R;
 import com.zalexdev.stryker.appintro.AppIntroActivity;
+import com.zalexdev.stryker.appintro.IntroPage;
 import com.zalexdev.stryker.engine.EngineType;
 import com.zalexdev.stryker.utils.Core;
 
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class SlidePCheck extends Fragment {
+public class SlidePCheck extends Fragment implements IntroPage {
 
     private static final String PREF_CHECKED = "pcheck_checked";
     private static final String PREF_ROOT = "pcheck_root";
@@ -47,16 +46,16 @@ public class SlidePCheck extends Fragment {
     private Context context;
     private Core core;
     private ViewPager2 mPager;
-    private MaterialCardView cardView;
+    private View cardView;
     private TextView capabilitiesLabel;
     private TextView disclaimer;
-    private MaterialButton button;
+    private boolean gateReady;
+    private boolean running;
     private LinearProgressIndicator progressIndicator;
 
-    private TextView rootSub, rootBadge;
-    private TextView monMode, monBadge;
-    private TextView usbOtg, usbBadge;
-    private TextView manufacture, manufactureBadge;
+    private TextView rootSub, monMode, usbOtg, manufacture;
+    private View rowRoot, rowMonitor, rowUsb, rowDevice, rowSpace;
+    private TextView summary;
     private TextView spaceSub, spaceBadge;
 
     private boolean checked = false;
@@ -83,38 +82,32 @@ public class SlidePCheck extends Fragment {
         cardView = view.findViewById(R.id.check_card);
         capabilitiesLabel = view.findViewById(R.id.capabilities_label);
         disclaimer = view.findViewById(R.id.disclaimer);
-        button = view.findViewById(R.id.login);
         progressIndicator = view.findViewById(R.id.progress_indicator);
 
         rootSub = view.findViewById(R.id.isRootOk);
-        rootBadge = view.findViewById(R.id.isRootBadge);
         monMode = view.findViewById(R.id.isMonitModeOk);
-        monBadge = view.findViewById(R.id.isMonitBadge);
         usbOtg = view.findViewById(R.id.isUsbOtgOk);
-        usbBadge = view.findViewById(R.id.isUsbBadge);
         manufacture = view.findViewById(R.id.isManufactureOk);
-        manufactureBadge = view.findViewById(R.id.isManufactureBadge);
         spaceSub = view.findViewById(R.id.isSpaceOk);
-        spaceBadge = view.findViewById(R.id.isSpaceBadge);
+        summary = view.findViewById(R.id.pcheck_summary);
 
-        button.setOnClickListener(view12 -> {
-            if (switchToRootless) {
-                EngineType.persist(core, EngineType.ROOTLESS);
-                ((AppIntroActivity) activity).applyEngineFlow(EngineType.ROOTLESS);
-                mPager.post(() -> core.moveNext(mPager));
-                return;
-            }
-            if (checked) {
-                core.moveNext(mPager);
-                return;
-            }
-            runCheck();
-        });
+        rowRoot = view.findViewById(R.id.row_root);
+        rowMonitor = view.findViewById(R.id.row_monitor);
+        rowUsb = view.findViewById(R.id.row_usb);
+        rowDevice = view.findViewById(R.id.row_device);
+        rowSpace = view.findViewById(R.id.row_space);
+
 
         if (core.getBoolean(PREF_CHECKED)) {
             restoreResults();
         }
         return view;
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (!checked && !running) runCheck();
     }
 
     @SuppressLint("SetTextI18n")
@@ -141,59 +134,43 @@ public class SlidePCheck extends Fragment {
         applyGate(rootOk);
     }
 
-    /**
-     * Decides what the button does once the checks are in.
-     *
-     * Everything past this slide — unpacking, mounting, apt — runs through a root shell, so
-     * without su the chroot install cannot get anywhere: it used to run anyway and die deep in
-     * the process with a reason invented from empty command output. The rootless VM engine needs
-     * no root, so offer that instead of a dead end; only when it is unsupported too is there
-     * genuinely nothing to continue to.
-     */
     private void applyGate(boolean rootOk) {
-        switchToRootless = false;
-        if (rootOk) {
-            button.setEnabled(true);
-            button.setText(context.getResources().getString(R.string.next));
-            button.setIconResource(R.drawable.bolt);
-            return;
-        }
-        if (EngineType.rootlessSupported(context)) {
-            switchToRootless = true;
-            button.setEnabled(true);
-            button.setText(context.getResources().getString(R.string.pcheck_switch_rootless));
-            button.setIconResource(R.drawable.bolt);
-        } else {
-            button.setEnabled(false);
-            button.setText(context.getResources().getString(R.string.pcheck_no_root));
-        }
+        switchToRootless = !rootOk && EngineType.rootlessSupported(context);
+        gateReady = rootOk || switchToRootless;
+        refreshChrome();
+    }
+
+    private void refreshChrome() {
+        if (activity instanceof AppIntroActivity) ((AppIntroActivity) activity).refreshPrimary();
     }
 
     @SuppressLint("SetTextI18n")
     private void renderRows(boolean rootOk, boolean monFinal, boolean usbOk,
                             boolean manufactOk, boolean spaceOk, long freeGb) {
         boolean archOk = Core.isArm64();
-        applyRow(rootOk, rootSub, rootBadge,
-                "Superuser shell available",
-                "su not detected — install Magisk or another root manager");
-        applyRow(monFinal, monMode, monBadge,
-                "Qualcomm + con_mode interface detected",
-                "Monitor mode unlikely — capture/handshake tools may fail");
-        applyRow(usbOk, usbOtg, usbBadge,
-                "USB host mode supported",
-                "External adapters won't be usable on this device");
-        applyRow(manufactOk && archOk, manufacture, manufactureBadge,
-                Build.MANUFACTURER + " · arm64-v8a — no known quirks",
+        boolean deviceOk = manufactOk && archOk;
+
+        applyRow(rootOk, rowRoot, rootSub,
+                "No su — install Magisk or another root manager");
+        applyRow(monFinal, rowMonitor, monMode,
+                "Monitor mode unlikely — capture and handshake tools may fail");
+        applyRow(usbOk, rowUsb, usbOtg,
+                "No USB host mode — external adapters will not work");
+        applyRow(deviceOk, rowDevice, manufacture,
                 archOk
-                        ? "Samsung stock ROM detected — wifi/local scan may misbehave"
-                        : Build.MANUFACTURER + " · " + primaryAbi()
-                                + " — Stryker is arm64-v8a only and will not run here");
-        applyRow(spaceOk, spaceSub, spaceBadge,
-                freeGb + " GB free on /data",
-                "Only " + freeGb + " GB free — Debian chroot install needs ~" + REQUIRED_FREE_GB + " GB");
+                        ? "Samsung stock ROM — WiFi and local scan may misbehave"
+                        : primaryAbi() + " — Stryker is arm64-v8a only");
+        applyRow(spaceOk, rowSpace, spaceSub,
+                "Only " + freeGb + " GB free — the chroot needs about "
+                        + REQUIRED_FREE_GB + " GB");
+
+        boolean allOk = rootOk && monFinal && usbOk && deviceOk && spaceOk;
+        summary.setText(allOk
+                ? getString(R.string.pcheck_all_ok) : getString(R.string.pcheck_some_issues));
+
         if (!archOk) {
             disclaimer.setText("This device reports " + primaryAbi()
-                    + ". Stryker ships arm64-v8a binaries only — the chroot toolset cannot be installed here.");
+                    + ". Stryker is arm64-v8a only — the chroot cannot be installed.");
         }
     }
 
@@ -205,7 +182,9 @@ public class SlidePCheck extends Fragment {
     @SuppressLint("SetTextI18n")
     private void runCheck() {
         progressIndicator.setVisibility(View.VISIBLE);
-        button.setEnabled(false);
+        running = true;
+        gateReady = false;
+        refreshChrome();
         cancelled.set(false);
 
         new Thread(() -> {
@@ -246,21 +225,15 @@ public class SlidePCheck extends Fragment {
                 renderRows(rootOk, monFinal, usbOk, manufactOk, spaceOk, freeGb);
 
                 checked = true;
+                running = false;
                 applyGate(rootOk);
             });
         }).start();
     }
 
-    private void applyRow(boolean ok, TextView subtitle, TextView badge,
-                          String okText, String warnText) {
-        subtitle.setText(ok ? okText : warnText);
-        badge.setText(ok ? "OK" : "FAIL");
-        int color = ContextCompat.getColor(context, ok ? R.color.green : R.color.red);
-        badge.setTextColor(color);
-        if (badge.getBackground() != null) {
-            badge.getBackground().mutate().setColorFilter(color, PorterDuff.Mode.SRC_IN);
-            badge.getBackground().setAlpha(40);
-        }
+    private void applyRow(boolean ok, View row, TextView detail, String warnText) {
+        row.setVisibility(ok ? View.GONE : View.VISIBLE);
+        if (!ok) detail.setText(warnText);
     }
 
     @Override
@@ -278,5 +251,35 @@ public class SlidePCheck extends Fragment {
         } catch (Throwable t) {
             return 0;
         }
+    }
+
+    @Override
+    public CharSequence primaryLabel(Context context) {
+        if (running) return context.getString(R.string.pcheck_running);
+        if (!checked) return context.getString(R.string.pcheck_run);
+        if (switchToRootless) return context.getString(R.string.pcheck_switch_rootless);
+        return context.getString(gateReady
+                ? R.string.intro_action_next : R.string.pcheck_no_root);
+    }
+
+    @Override
+    public boolean primaryEnabled() {
+        if (running) return false;
+        if (!checked) return true;
+        return gateReady;
+    }
+
+    @Override
+    public void onPrimary() {
+        if (switchToRootless) {
+            EngineType.persist(core, EngineType.ROOTLESS);
+            ((AppIntroActivity) activity).applyEngineFlow(EngineType.ROOTLESS);
+            return;
+        }
+        if (checked) {
+            core.moveNext(mPager);
+            return;
+        }
+        runCheck();
     }
 }

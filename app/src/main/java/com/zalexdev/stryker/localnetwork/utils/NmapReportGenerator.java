@@ -129,7 +129,7 @@ public class NmapReportGenerator extends IntentService {
         ArrayList<String> output = new ArrayList<>();
         GuestExec.Session s = null;
         try {
-            s = core.rootless().openStream("nmap " + ip + " -A --script=vuln --stats-every 1s -Pn");
+            s = core.guest().openStream("nmap " + ip + " -A --script=vuln --stats-every 1s -Pn");
             String line;
             while ((line = s.reader.readLine()) != null) {
                 if (line.startsWith(GuestExec.Session.SENTINEL)) {

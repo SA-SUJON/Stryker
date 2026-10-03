@@ -12,6 +12,7 @@ import android.util.AttributeSet;
 import android.view.View;
 import android.view.animation.LinearInterpolator;
 
+import androidx.annotation.ColorInt;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.content.res.AppCompatResources;
@@ -55,6 +56,10 @@ public final class VmRingView extends View {
     private float ringStartOffset;
 
     private int state = STATE_STOPPED;
+
+    private boolean ringEnabled;
+
+    private boolean tileEnabled = true;
     private float progress = -1f;
     private float shownProgress = -1f;
     private float phase;
@@ -236,9 +241,10 @@ public final class VmRingView extends View {
         super.onDraw(canvas);
         if (tileRect.width() <= 0f) return;
 
-        canvas.drawRoundRect(tileRect, tileRadius, tileRadius, tilePaint);
+        if (tileEnabled) canvas.drawRoundRect(tileRect, tileRadius, tileRadius, tilePaint);
         if (glyph != null) glyph.draw(canvas);
 
+        if (!ringEnabled) return;
         if (state == STATE_READY || ringLength <= 0f) return;
 
         if (state == STATE_STOPPED) {
@@ -316,7 +322,32 @@ public final class VmRingView extends View {
         syncAnimator();
     }
 
+    public void setTileEnabled(boolean enabled) {
+        tileEnabled = enabled;
+        invalidate();
+    }
+
+    public void setTileColor(@ColorInt int color) {
+        tilePaint.setColor(color);
+        invalidate();
+    }
+
+    public void setGlyphTint(@ColorInt int color) {
+        if (glyph != null) glyph.setTint(color);
+        invalidate();
+    }
+
+    public void setRingEnabled(boolean enabled) {
+        ringEnabled = enabled;
+        syncAnimator();
+        invalidate();
+    }
+
     private void syncAnimator() {
+        if (!ringEnabled) {
+            stopAnimator();
+            return;
+        }
         boolean wanted = attached
                 && state == STATE_BOOTING
                 && progress < 0f

@@ -11,6 +11,7 @@ import java.util.concurrent.Executors
 import java.util.zip.DataFormatException
 import java.util.zip.Deflater
 import java.util.zip.Inflater
+import com.stryker.terminal.bridge.StrykerLog
 
 object NLog {
 
@@ -225,7 +226,7 @@ object NLog {
     val time = format.substring(6)
     val fullPath = logDir + date + ".txt"
     if (!createOrExistsFile(fullPath)) {
-      Log.e(tag, "log to $fullPath failed!")
+      StrykerLog.e(tag, "log to $fullPath failed!")
       return
     }
     val sb = StringBuilder()
@@ -244,10 +245,10 @@ object NLog {
       try {
         bw = BufferedWriter(FileWriter(fullPath, true))
         bw.write(content)
-        Log.d(tag, "log to $fullPath success!")
+        StrykerLog.d(tag, "log to $fullPath success!")
       } catch (e: IOException) {
         e.printStackTrace()
-        Log.e(tag, "log to $fullPath failed!")
+        StrykerLog.e(tag, "log to $fullPath failed!")
       } finally {
         try {
           if (bw != null) {

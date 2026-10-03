@@ -1,13 +1,13 @@
 package com.stryker.terminal.backend;
 
 import android.util.Base64;
-import android.util.Log;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Stack;
+import com.stryker.terminal.bridge.StrykerLog;
 
 public final class TerminalEmulator {
 
@@ -570,7 +570,7 @@ public final class TerminalEmulator {
                 if (internalBit == -1) {
                   value = isDecsetInternalBitSet(internalBit) ? 1 : 2;
                 } else {
-                  Log.e(EmulatorDebug.LOG_TAG, "Got DECRQM for unrecognized private DEC mode=" + mode);
+                  StrykerLog.e(EmulatorDebug.LOG_TAG, "Got DECRQM for unrecognized private DEC mode=" + mode);
                   value = 0;
                 }
               }
@@ -665,7 +665,7 @@ public final class TerminalEmulator {
                   case "&8":
                     break;
                   default:
-                    Log.w(EmulatorDebug.LOG_TAG, "Unhandled termcap/terminfo name: '" + trans + "'");
+                    StrykerLog.w(EmulatorDebug.LOG_TAG, "Unhandled termcap/terminfo name: '" + trans + "'");
                 }
                 mSession.write("\033P0+r" + part + "\033\\");
               } else {
@@ -676,12 +676,12 @@ public final class TerminalEmulator {
                 mSession.write("\033P1+r" + part + "=" + hexEncoded + "\033\\");
               }
             } else {
-              Log.e(EmulatorDebug.LOG_TAG, "Invalid device termcap/terminfo name of odd length: " + part);
+              StrykerLog.e(EmulatorDebug.LOG_TAG, "Invalid device termcap/terminfo name of odd length: " + part);
             }
           }
         } else {
           if (LOG_ESCAPE_SEQUENCES)
-            Log.e(EmulatorDebug.LOG_TAG, "Unrecognized device control string: " + dcs);
+            StrykerLog.e(EmulatorDebug.LOG_TAG, "Unrecognized device control string: " + dcs);
         }
         finishSequence();
       }
@@ -768,7 +768,7 @@ public final class TerminalEmulator {
           int externalBit = mArgs[i];
           int internalBit = mapDecSetBitToInternalBit(externalBit);
           if (internalBit == -1) {
-            Log.w(EmulatorDebug.LOG_TAG, "Ignoring request to save/recall decset bit=" + externalBit);
+            StrykerLog.w(EmulatorDebug.LOG_TAG, "Ignoring request to save/recall decset bit=" + externalBit);
           } else {
             if (b == 's') {
               mSavedDecSetFlags |= internalBit;
@@ -877,7 +877,7 @@ public final class TerminalEmulator {
         mSession.write("\033[>41;320;0c");
         break;
       case 'm':
-        Log.e(EmulatorDebug.LOG_TAG, "(ignored) CSI > MODIFY RESOURCE: " + getArg0(-1) + " to " + getArg1(-1));
+        StrykerLog.e(EmulatorDebug.LOG_TAG, "(ignored) CSI > MODIFY RESOURCE: " + getArg0(-1) + " to " + getArg1(-1));
         break;
       default:
         parseArg(b);
@@ -1372,7 +1372,7 @@ public final class TerminalEmulator {
         int firstArg = mArgs[i + 1];
         if (firstArg == 2) {
           if (i + 4 > mArgIndex) {
-            Log.w(EmulatorDebug.LOG_TAG, "Too few CSI" + code + ";2 RGB arguments");
+            StrykerLog.w(EmulatorDebug.LOG_TAG, "Too few CSI" + code + ";2 RGB arguments");
           } else {
             int red = mArgs[i + 2], green = mArgs[i + 3], blue = mArgs[i + 4];
             if (red < 0 || green < 0 || blue < 0 || red > 255 || green > 255 || blue > 255) {
@@ -1398,7 +1398,7 @@ public final class TerminalEmulator {
             }
           } else {
             if (LOG_ESCAPE_SEQUENCES)
-              Log.w(EmulatorDebug.LOG_TAG, "Invalid color index: " + color);
+              StrykerLog.w(EmulatorDebug.LOG_TAG, "Invalid color index: " + color);
           }
         } else {
           finishSequenceAndLogError("Invalid ISO-8613-3 SGR first argument: " + firstArg);
@@ -1415,7 +1415,7 @@ public final class TerminalEmulator {
         mBackColor = code - 100 + 8;
       } else {
         if (LOG_ESCAPE_SEQUENCES)
-          Log.w(EmulatorDebug.LOG_TAG, String.format("SGR unknown code %d", code));
+          StrykerLog.w(EmulatorDebug.LOG_TAG, String.format("SGR unknown code %d", code));
       }
     }
   }
@@ -1535,7 +1535,7 @@ public final class TerminalEmulator {
           String clipboardText = new String(Base64.decode(textParameter.substring(startIndex), 0), StandardCharsets.UTF_8);
           mSession.clipboardText(clipboardText);
         } catch (Exception e) {
-          Log.e(EmulatorDebug.LOG_TAG, "OSC Manipulate selection, invalid string '" + textParameter + "");
+          StrykerLog.e(EmulatorDebug.LOG_TAG, "OSC Manipulate selection, invalid string '" + textParameter + "");
         }
         break;
       case 104:
@@ -1728,7 +1728,7 @@ public final class TerminalEmulator {
   }
 
   private void finishSequenceAndLogError(String error) {
-    if (LOG_ESCAPE_SEQUENCES) Log.w(EmulatorDebug.LOG_TAG, error);
+    if (LOG_ESCAPE_SEQUENCES) StrykerLog.w(EmulatorDebug.LOG_TAG, error);
     finishSequence();
   }
 

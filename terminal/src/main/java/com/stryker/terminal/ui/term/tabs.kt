@@ -5,7 +5,6 @@ import android.content.res.Configuration
 import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -28,6 +27,7 @@ import de.mrapp.android.tabswitcher.Tab
 import de.mrapp.android.tabswitcher.TabSwitcher
 import de.mrapp.android.tabswitcher.TabSwitcherDecorator
 import org.greenrobot.eventbus.EventBus
+import com.stryker.terminal.bridge.StrykerLog
 
 open class NeoTab(title: CharSequence) : Tab(title) {
   open fun onPause() {}
@@ -149,7 +149,7 @@ class NeoTabDecorator(val context: NeoTermActivity) : TabSwitcherDecorator() {
             videoLayout.getWindowVisibleDisplayFrame(r)
             val heightDiff = videoLayout.rootView.height - videoLayout.height
             val widthDiff = videoLayout.rootView.width - videoLayout.width
-            Log.v(
+            StrykerLog.v(
               "SDL",
               "Main window visible region changed: " + r.left + ":" + r.top + ":" + r.width() + ":" + r.height()
             )

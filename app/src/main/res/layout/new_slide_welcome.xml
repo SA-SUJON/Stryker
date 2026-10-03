@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    style="@style/IntroContent">
+
+    <com.airbnb.lottie.LottieAnimationView
+        android:id="@+id/welcome_wave"
+        android:tag="intro_autoplay"
+        android:layout_width="84dp"
+        android:layout_height="84dp"
+        android:layout_marginBottom="4dp"
+        app:lottie_colorFilter="@color/intro_text"
+        app:lottie_loop="true"
+        app:lottie_rawRes="@raw/waving_hand" />
+
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/welcome_eyebrow"
+        style="@style/IntroEyebrow"
+        android:text="@string/intro_eyebrow_welcome" />
+
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/welcome_title"
+        style="@style/IntroTitle"
+        android:text="@string/intro_welcome_title" />
+
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/welcome_subtitle"
+        style="@style/IntroSubtitle"
+        android:text="@string/intro_welcome_body" />
+</LinearLayout>

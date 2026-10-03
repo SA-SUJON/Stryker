@@ -13,6 +13,7 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 import com.google.android.material.button.MaterialButton;
@@ -142,11 +143,8 @@ public class WpairDeviceDialog extends BottomSheetDialogFragment {
     public void onResume() {
         super.onResume();
         IntentFilter f = new IntentFilter(WpairLog.ACTION_UPDATED);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            requireContext().registerReceiver(onLogUpdate, f, Context.RECEIVER_NOT_EXPORTED);
-        } else {
-            requireContext().registerReceiver(onLogUpdate, f);
-        }
+        ContextCompat.registerReceiver(requireContext(), onLogUpdate, f,
+                ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
     @Override

@@ -1,24 +1,3 @@
-/*
-Simple DirectMedia Layer
-Java source code (C) 2009-2014 Sergii Pylypenko
-
-This software is provided 'as-is', without any express or implied
-warranty.  In no event will the authors be held liable for any damages
-arising from the use of this software.
-
-Permission is granted to anyone to use this software for any purpose,
-including commercial applications, and to alter it and redistribute it
-freely, subject to the following restrictions:
-
-1. The origin of this software must not be misrepresented; you must not
-   claim that you wrote the original software. If you use this software
-   in a product, an acknowledgment in the product documentation would be
-   appreciated but is not required. 
-2. Altered source versions must be plainly marked as such, and must not be
-   misrepresented as being the original software.
-3. This notice may not be removed or altered from any source distribution.
-*/
-
 package com.stryker.terminal;
 
 import android.content.DialogInterface;
@@ -26,7 +5,6 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
 import android.graphics.RectF;
-import android.util.Log;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
@@ -36,6 +14,7 @@ import androidx.appcompat.app.AlertDialog;
 import com.stryker.terminal.xorg.R;
 
 import java.util.ArrayList;
+import com.stryker.terminal.bridge.StrykerLog;
 
 
 class SettingsMenuMouse extends SettingsMenu {
@@ -598,7 +577,7 @@ class SettingsMenuMouse extends SettingsMenu {
           p.getVideoLayout().setOnTouchListener(null);
           Globals.ClickScreenPressure = getAverageForce();
           Globals.ClickScreenTouchspotSize = getAverageRadius();
-          Log.i("SDL", "SDL: measured average force " + Globals.ClickScreenPressure + " radius " + Globals.ClickScreenTouchspotSize);
+          StrykerLog.i("SDL", "SDL: measured average force " + Globals.ClickScreenPressure + " radius " + Globals.ClickScreenTouchspotSize);
           goBack(p);
         }
         return true;

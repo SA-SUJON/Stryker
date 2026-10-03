@@ -7,6 +7,18 @@
     <color name="yellow">#F9A825</color>
     <color name="red">#C62828</color>
     <color name="green">#2E7D32</color>
+    <color name="welcome_ink">#3B82F6</color>
+    <color name="welcome_line_1">#A6C8FF</color>
+    <color name="welcome_line_2">#4A90E2</color>
+    <color name="welcome_line_3">#FFFFFF</color>
+    <color name="welcome_logo_tile">#EAF1FB</color>
+    <color name="welcome_logo_stroke">#D3E2F7</color>
+
+    <color name="intro_ink">#1565C0</color>
+    <color name="intro_line_1">#A6C8FF</color>
+    <color name="intro_line_2">#7FB3F0</color>
+    <color name="intro_line_3">#FFFFFF</color>
+
     <color name="light_contrast">#FFFFFF</color>
     <color name="night_contrast">#404040</color>
     <color name="night_contrast_2">#1C1C1C</color>
@@ -19,7 +31,6 @@
     <color name="toolbar_color">#ededed</color>
     <color name="toolbar_darkness_color">#fff</color>
 
-    <!-- Per-tool accent tokens (previously scattered hardcoded hex across ~40 layouts). -->
     <color name="accent_wifi">#1565C0</color>
     <color name="accent_local">#AB47BC</color>
     <color name="accent_handshakes">#00897B</color>
@@ -31,17 +42,13 @@
     <color name="accent_metasploit">#C62828</color>
     <color name="accent_utilities">#5E35B1</color>
 
-    <!-- Engine identity — drives the unified status card badge + drawer status dot. -->
     <color name="accent_chroot">#2E7D32</color>
     <color name="accent_vm">#1E88E5</color>
     <color name="status_booting">#F9A825</color>
     <color name="status_offline">#9E9E9E</color>
 
-    <!-- Disabled ROOT-section rows. -->
     <color name="row_locked">#61757575</color>
 
-    <!-- Icon tile discs. Kept readable against the card in BOTH themes: pastel on light,
-         low-alpha hue on dark (the pastels used to render as near-white blobs at night). -->
     <color name="icon_tile_neutral">#E9EBEE</color>
     <color name="tile_blue">#E3F2FD</color>
     <color name="tile_cyan">#E0F7FA</color>
@@ -52,4 +59,24 @@
     <color name="tile_purple">#F3E5F5</color>
     <color name="tile_red">#FFEBEE</color>
     <color name="tile_teal">#E0F2F1</color>
+
+    <color name="thanks_text">#0B2B45</color>
+    <color name="thanks_text_dim">#42708F</color>
+    <color name="thanks_chip_fill">#14000000</color>
+    <color name="thanks_chip_stroke">#22105A8C</color>
+
+    <color name="intro_text">#0A1F3D</color>
+    <color name="intro_text_dim">#4A6C8C</color>
+    <color name="intro_chip_bg">#140A2540</color>
+    <color name="intro_dot">#33002E5C</color>
+    <color name="intro_dot_active">#1565C0</color>
+    <color name="intro_button_bg">#1565C0</color>
+    <color name="intro_button_text">#FFFFFF</color>
+    <color name="intro_surface">#E6FFFFFF</color>
+    <color name="intro_outline">#2A0A2540</color>
+
+    <color name="dash_surface">#F4F4F7</color>
+    <color name="dash_surface_high">#EAEAEF</color>
+
+    <color name="dash_secondary">#757575</color>
 </resources>

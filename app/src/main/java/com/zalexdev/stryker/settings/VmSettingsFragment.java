@@ -10,6 +10,8 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
+import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -80,6 +82,8 @@ public class VmSettingsFragment extends Fragment {
         v.findViewById(R.id.vm_pauth_row).setOnClickListener(x -> showPauthDialog());
 
         v.findViewById(R.id.vm_mttcg_row).setOnClickListener(x -> mttcg.setChecked(!mttcg.isChecked()));
+        wireUmlEngineRow(v);
+        applyEngineCapabilities(v);
         v.findViewById(R.id.vm_norng_row).setOnClickListener(x -> norng.setChecked(!norng.isChecked()));
         v.findViewById(R.id.vm_noshare_row).setOnClickListener(x -> noshare.setChecked(!noshare.isChecked()));
         v.findViewById(R.id.vm_iothread_row).setOnClickListener(x -> iothread.setChecked(!iothread.isChecked()));
@@ -430,5 +434,69 @@ public class VmSettingsFragment extends Fragment {
 
     private void ui(Runnable r) {
         if (activity != null && isAdded()) activity.runOnUiThread(r);
+    }
+
+    private void wireUmlEngineRow(View v) {
+        com.google.android.material.switchmaterial.SwitchMaterial sw = v.findViewById(R.id.vm_uml_switch);
+        View row = v.findViewById(R.id.vm_uml_row);
+        com.google.android.material.textview.MaterialTextView sub = v.findViewById(R.id.vm_uml_sub);
+        if (sw == null || row == null) return;
+
+        com.zalexdev.stryker.engine.UmlEngine probe =
+                new com.zalexdev.stryker.engine.UmlEngine(context);
+        java.util.List<String> gaps = probe.missing();
+        boolean usable = gaps.isEmpty();
+
+        sw.setChecked(com.zalexdev.stryker.engine.EngineType.isUml(core));
+        if (!usable) {
+            sw.setEnabled(false);
+            row.setAlpha(0.5f);
+            if (sub != null) sub.setText(getString(R.string.vm_uml_needs,
+                    android.text.TextUtils.join(", ", gaps)));
+        }
+
+        row.setOnClickListener(x -> {
+            if (!usable) return;
+            boolean on = !sw.isChecked();
+            sw.setChecked(on);
+            com.zalexdev.stryker.engine.EngineType.persist(core,
+                    on ? com.zalexdev.stryker.engine.EngineType.UML
+                       : com.zalexdev.stryker.engine.EngineType.ROOTLESS);
+            android.widget.Toast.makeText(context, R.string.vm_uml_switch_note,
+                    android.widget.Toast.LENGTH_LONG).show();
+        });
+    }
+
+    private void applyEngineCapabilities(View v) {
+        com.zalexdev.stryker.engine.GuestEngine active =
+                com.zalexdev.stryker.engine.Engines.active(core);
+        if (active == null) return;
+
+        setRowVisible(v, R.id.vm_cache_row,
+                active.supports(com.zalexdev.stryker.engine.GuestEngine.Capability.DISK_TUNING));
+        setRowVisible(v, R.id.vm_aio_row,
+                active.supports(com.zalexdev.stryker.engine.GuestEngine.Capability.DISK_TUNING));
+        setRowVisible(v, R.id.vm_mttcg_row,
+                active.supports(com.zalexdev.stryker.engine.GuestEngine.Capability.TCG_TUNING));
+        setRowVisible(v, R.id.vm_disk_row,
+                active.supports(com.zalexdev.stryker.engine.GuestEngine.Capability.DISK_RESIZE));
+        setRowVisible(v, R.id.vm_benchmark_row,
+                active.supports(com.zalexdev.stryker.engine.GuestEngine.Capability.TCG_TUNING));
+        setRowVisible(v, R.id.vm_recommend_row,
+                active.supports(com.zalexdev.stryker.engine.GuestEngine.Capability.TCG_TUNING));
+    }
+
+    private void setRowVisible(View root, int id, boolean visible) {
+        View row = root.findViewById(id);
+        if (row == null) return;
+        row.setVisibility(visible ? View.VISIBLE : View.GONE);
+        ViewParent parent = row.getParent();
+        if (!(parent instanceof ViewGroup)) return;
+        ViewGroup group = (ViewGroup) parent;
+        int i = group.indexOfChild(row);
+        if (i >= 0 && i + 1 < group.getChildCount()) {
+            View next = group.getChildAt(i + 1);
+            if (next.getId() == View.NO_ID) next.setVisibility(visible ? View.VISIBLE : View.GONE);
+        }
     }
 }

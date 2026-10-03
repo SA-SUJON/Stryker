@@ -168,13 +168,13 @@ public final class HydraEngine {
             if (notEmpty(spec.singleLogin)) {
                 cmd.append("-l ").append(shellQuote(spec.singleLogin)).append(' ');
             } else if (notEmpty(spec.loginWordlist)) {
-                cmd.append("-L /sdcard/Stryker/wordlists/").append(spec.loginWordlist).append(' ');
+                cmd.append("-L ").append(spec.loginWordlist).append(' ');
             }
         }
         if (notEmpty(spec.singlePassword)) {
             cmd.append("-p ").append(shellQuote(spec.singlePassword)).append(' ');
         } else if (notEmpty(spec.passwordWordlist)) {
-            cmd.append("-P /sdcard/Stryker/wordlists/").append(spec.passwordWordlist).append(' ');
+            cmd.append("-P ").append(spec.passwordWordlist).append(' ');
         }
 
         cmd.append(spec.service).append("://").append(spec.target);
@@ -211,7 +211,7 @@ public final class HydraEngine {
 
     private void openTranscript(Spec spec) {
         try {
-            File dir = new File("/sdcard/Stryker/hydra");
+            File dir = new File(core.getShareRoot(), "hydra");
             dir.mkdirs();
             String ts = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date());
             String safeTarget = spec.target.replaceAll("[^A-Za-z0-9._-]", "_");

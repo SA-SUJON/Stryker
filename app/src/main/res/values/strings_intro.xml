@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="intro_eyebrow_welcome">Welcome</string>
+    <string name="intro_eyebrow_consent">Before you start</string>
+    <string name="intro_eyebrow_check">Device</string>
+    <string name="intro_eyebrow_engine">Engine</string>
+    <string name="intro_eyebrow_access">Access</string>
+    <string name="intro_eyebrow_install">Install</string>
+    <string name="intro_eyebrow_ready">Ready</string>
+
+    <string name="intro_welcome_title">A pentest lab\nin your pocket</string>
+    <string name="intro_welcome_body">Scan, audit and crack networks from your phone. Setup takes a few minutes.</string>
+
+    <string name="intro_consent_title">Authorized\ntesting only</string>
+    <string name="intro_consent_body">Three things to agree to before anything is installed.</string>
+
+    <string name="intro_caps_title">Checking
+this device</string>
+
+    <string name="intro_engine_title">How Stryker\nruns</string>
+    <string name="intro_engine_body">Already chosen for this device. Change it only if you know why.</string>
+
+    <string name="intro_perms_title">Two\npermissions</string>
+
+    <string name="intro_pcheck_title">What works\non this device</string>
+    <string name="intro_pcheck_body">A quick look at the hardware before anything is installed.</string>
+
+    <string name="intro_install_title">Setting up</string>
+    <string name="intro_install_body">A few minutes. You can leave this screen.</string>
+
+    <string name="intro_ready_title">You\'re all set</string>
+
+    <string name="intro_action_next">Next</string>
+    <string name="intro_action_continue">Continue</string>
+    <string name="intro_action_start">Get started</string>
+    <string name="intro_action_grant">Grant access</string>
+    <string name="intro_action_install">Install</string>
+    <string name="intro_action_launch">Launch Stryker</string>
+    <string name="intro_action_retry">Try again</string>
+
+    <string name="intro_show_details">View log</string>
+
+    <string name="final_guest_body">The Debian guest is up. A USB adapter attaches to it automatically.</string>
+    <string name="final_guest_shell">Open the guest shell from the dashboard.</string>
+    <string name="final_chroot_body">The Debian toolset is mounted at %1$s.</string>
+    <string name="final_chroot_shell">Open a shell from the dashboard.</string>
+
+    <string name="consent_authorized">I use this tool for authorized testing only</string>
+    <string name="consent_responsibility">I take full responsibility</string>
+    <string name="consent_permitted">I only test networks I own or am permitted to test</string>
+
+    <string name="perm_root">Root</string>
+    <string name="perm_root_ok">Granted</string>
+    <string name="perm_root_pending">Mounts the chroot, runs privileged tools</string>
+    <string name="perm_root_not_needed">Not needed by the guest engine</string>
+    <string name="perm_storage">Storage</string>
+    <string name="perm_storage_ok">Granted</string>
+    <string name="perm_storage_pending">Wordlists, scans and handshakes</string>
+    <string name="perm_battery">Battery</string>
+    <string name="perm_battery_ok">Exempt from optimisation</string>
+    <string name="perm_battery_pending">Keeps long scans alive</string>
+    <string name="perm_denied_title">Not granted</string>
+    <string name="intro_action_check_again">Check again</string>
+
+    <string name="engine_chroot_name">Root</string>
+    <string name="engine_chroot_line">Fastest. Uses the device kernel and Wi-Fi directly.</string>
+    <string name="engine_uml_name">UML-ARM64 (Experimental)</string>
+    <string name="engine_uml_line">A Linux kernel as an ordinary process. No root.</string>
+    <string name="engine_vm_name">Virtual machine</string>
+    <string name="engine_vm_line">A full Linux VM under QEMU. No root.</string>
+    <string name="engine_needs_arm64">Needs arm64</string>
+
+    <string name="intro_eyebrow_autosetup">Autosetup</string>
+
+    <string name="pcheck_all_ok">Everything checks out.</string>
+    <string name="pcheck_some_issues">These will not work on this device.</string>
+
+    <string name="perm_root_denied">Denied — grant it in your root manager</string>
+    <string name="perm_storage_denied">Still off — allow all files in Settings</string>
+    <string name="perm_continue_without_storage">Continue without storage</string>
+
+    <string name="caps_sum_root">Root granted. Nothing to download.</string>
+    <string name="caps_sum_uml">No root. The kernel runs here.</string>
+    <string name="caps_sum_uml_fallback">No root. The kernel runs here, with the VM as backup.</string>
+    <string name="caps_sum_vm">No root, and the kernel will not start here.</string>
+    <string name="caps_sum_none">Nothing here can run an engine.</string>
+    <string name="caps_warn_data">On mobile data.</string>
+    <string name="caps_warn_storage">Storage is tight.</string>
+    <string name="caps_warn_memory">Memory is tight.</string>
+
+    <string name="caps_check_arch">the processor</string>
+    <string name="caps_check_root">root access</string>
+    <string name="caps_check_memory">memory</string>
+    <string name="caps_check_storage">storage</string>
+    <string name="caps_check_network">the network</string>
+    <string name="caps_check_uml">UML-ARM64</string>
+    <string name="caps_check_vm">the virtual machine</string>
+
+    <string name="pcheck_run">Run check</string>
+    <string name="pcheck_running">Checking…</string>
+</resources>

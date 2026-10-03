@@ -7,20 +7,20 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
 
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
+        android:maxSdkVersion="29" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
-    <!-- Rootless engine: optional all-files access so captures land in the visible /sdcard/Stryker.
-         If not granted, the engine falls back to the app-private external dir (no permission). -->
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
 
     <uses-permission android:name="android.permission.BLUETOOTH"
@@ -36,8 +36,32 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
 
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/vnd.android.package-archive" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="http" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="*/*" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.GET_CONTENT" />
+            <data android:mimeType="*/*" />
+        </intent>
+    </queries>
+
     <application
         android:name=".StrykerApp"
+        android:enableOnBackInvokedCallback="false"
         android:icon="@mipmap/appicon"
         android:label="@string/app_name"
         android:requestLegacyExternalStorage="true"
@@ -45,6 +69,10 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Stryker"
         android:usesCleartextTraffic="true">
+
+        <property
+            android:name="android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY"
+            android:value="true" />
 
         <activity
             android:name=".geomac.GeoMacInline"
@@ -84,11 +112,22 @@
 
         <service
             android:name=".vnc.VNCService"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps the VNC server in the Linux guest and its port forward alive while a VNC client is connected." />
+        </service>
 
         <activity
             android:name=".utils.LicenseActivity"
             android:exported="false" />
+
+        <activity
+            android:name=".about.ThanksActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
+            android:exported="false"
+            android:theme="@style/Theme.Stryker.Immersive" />
 
         <activity
             android:name=".hid.ui.HidIdeActivity"
@@ -111,10 +150,15 @@
             android:name=".install.InstallService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
         <service
             android:name=".engine.RootlessService"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="specialUse|dataSync">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps the Linux virtual machine the app runs its tools inside alive while the user is working with it." />
+        </service>
         <service
             android:name=".localnetwork.utils.NmapReportGenerator"
             android:exported="false" />
@@ -122,7 +166,8 @@
         <activity
             android:name=".appintro.AppIntroActivity"
             android:exported="false"
-            android:screenOrientation="portrait" />
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.Stryker.Immersive" />
         <activity
             android:name=".searchsploit.ExploitWebview"
             android:exported="false"

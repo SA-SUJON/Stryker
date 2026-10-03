@@ -116,12 +116,26 @@ public final class NetDetector {
                 androidEntry != null ? androidEntry.product : null,
                 usbDir != null ? SysfsReader.readText(usbDir + "/product") : null);
         String speed = usbDir != null ? SysfsReader.readText(usbDir + "/speed") : null;
+        String busPath = androidEntry != null ? androidEntry.deviceName : null;
+        if (busPath == null && usbDir != null) busPath = usbfsPath(usbDir);
 
         UsbDeviceReport report = new UsbDeviceReport(
-                vidPid, port, sysPath, manufacturer, product, speed,
+                vidPid, port, sysPath, manufacturer, product, speed, busPath,
                 ifaces, info, source);
         attachWarnings(report);
         return report;
+    }
+
+    private static String usbfsPath(File usbDir) {
+        String bus = SysfsReader.readText(usbDir + "/busnum");
+        String dev = SysfsReader.readText(usbDir + "/devnum");
+        if (bus == null || dev == null) return null;
+        try {
+            return String.format(java.util.Locale.US, "/dev/bus/usb/%03d/%03d",
+                    Integer.parseInt(bus.trim()), Integer.parseInt(dev.trim()));
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private static String pickFirst(String a, String b) {

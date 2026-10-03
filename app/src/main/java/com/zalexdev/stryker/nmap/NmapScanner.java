@@ -547,7 +547,7 @@ public class NmapScanner extends Fragment {
 
     private File writeOutputFile() {
         try {
-            File dir = new File(core.getStorage() + "Stryker/nmap");
+            File dir = new File(core.getShareRoot(), "nmap");
             if (!dir.exists() && !dir.mkdirs()) return null;
             String name = "nmap-" + new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date()) + ".txt";
             File f = new File(dir, name);

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="about_thanks_label">Thanks</string>
+    <string name="about_thanks_desc">The people who got Stryker here</string>
+
+    <string name="thanks_title">Thank you</string>
+    <string name="thanks_subtitle">Stryker runs on other people\'s time, testing and patches.</string>
+    <string name="thanks_section">SPECIAL THANKS</string>
+    <string name="thanks_community">…and the Stryker community</string>
+    <string name="thanks_close">Close</string>
+
+    <string name="thanks_line">Special thanks: %1$s and the Stryker community</string>
+
+    <string-array name="thanks_people" translatable="false">
+        <item>Nevod</item>
+        <item>Jb314</item>
+        <item>Max</item>
+        <item>Lukas</item>
+        <item>Mirivan</item>
+        <item>The Show Started</item>
+        <item>skilfulwriter (X黑手)</item>
+    </string-array>
+
+</resources>

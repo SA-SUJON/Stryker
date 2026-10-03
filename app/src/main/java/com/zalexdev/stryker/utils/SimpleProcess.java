@@ -95,7 +95,7 @@ public abstract class SimpleProcess {
         new Thread(() -> {
             logger.writeLine("Rootless command: " + cmd, 1, tool);
             try {
-                guestSession = core.rootless().openStream(cmd);
+                guestSession = core.guest().openStream(cmd);
                 String line;
                 while ((line = guestSession.reader.readLine()) != null) {
                     if (line.startsWith(GuestExec.Session.SENTINEL)) break;

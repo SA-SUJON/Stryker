@@ -1,7 +1,6 @@
 package com.zalexdev.stryker.netdetect;
 
 import android.content.Context;
-import android.util.Log;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -12,6 +11,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import com.stryker.terminal.bridge.StrykerLog;
 
 public final class LegacyDeviceDb {
 
@@ -81,7 +81,7 @@ public final class LegacyDeviceDb {
                 out.put(key.toLowerCase(), entry.getString(key));
             }
         } catch (Exception e) {
-            Log.w(TAG, "Failed to load devices.txt", e);
+            StrykerLog.w(TAG, "Failed to load devices.txt", e);
         }
         return out;
     }

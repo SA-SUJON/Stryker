@@ -168,11 +168,8 @@ public class NucleiReport extends Fragment {
     public void onResume() {
         super.onResume();
         IntentFilter f = new IntentFilter(NucleiScanService.ACTION_UPDATED);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            requireContext().registerReceiver(updates, f, Context.RECEIVER_NOT_EXPORTED);
-        } else {
-            requireContext().registerReceiver(updates, f);
-        }
+        ContextCompat.registerReceiver(requireContext(), updates, f,
+                ContextCompat.RECEIVER_NOT_EXPORTED);
         reload();
     }
 

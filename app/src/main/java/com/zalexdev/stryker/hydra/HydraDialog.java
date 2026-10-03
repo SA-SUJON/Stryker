@@ -27,10 +27,12 @@ import com.google.android.material.textfield.TextInputLayout;
 import com.zalexdev.stryker.R;
 import com.zalexdev.stryker.custom.Device;
 import com.zalexdev.stryker.utils.Core;
+import com.zalexdev.stryker.wordlists.Wordlist;
+import com.zalexdev.stryker.wordlists.WordlistCategory;
+import com.zalexdev.stryker.wordlists.WordlistPickerDialog;
+import com.zalexdev.stryker.wordlists.WordlistStore;
 import com.zalexdev.stryker.utils.NoNestedScrollView;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -120,20 +122,31 @@ public final class HydraDialog {
         threadsSlider.addOnChangeListener((slider, value, fromUser) ->
                 threadsValue.setText(String.valueOf((int) value)));
 
-        new Thread(() -> {
-            ArrayList<String> list = core.getListFiles("/sdcard/Stryker/wordlists");
-            if (list == null) list = new ArrayList<>();
-            Collections.sort(list);
-            String[] arr = list.toArray(new String[0]);
-            activity.runOnUiThread(() -> {
-                loginWl.setSimpleItems(arr);
-                passwordWl.setSimpleItems(arr);
-                if (arr.length > 0) {
-                    loginWl.setText(arr[0], false);
-                    passwordWl.setText(arr[0], false);
-                }
-            });
-        }, "hydra-wordlist-load").start();
+        final Wordlist[] loginList = { null };
+        final Wordlist[] passwordList = { null };
+        final WordlistStore wordlistStore = new WordlistStore(core);
+
+        loginWl.setInputType(android.text.InputType.TYPE_NULL);
+        loginWl.setKeyListener(null);
+        loginWl.setOnClickListener(v -> WordlistPickerDialog.show(context, activity, core,
+                context.getString(R.string.hydra_pick_logins),
+                new WordlistCategory[] { WordlistCategory.USERNAME, WordlistCategory.PASSWORD },
+                loginList[0] == null ? null : loginList[0].getName(),
+                wl -> {
+                    loginList[0] = wl;
+                    loginWl.setText(wl.getName(), false);
+                }));
+
+        passwordWl.setInputType(android.text.InputType.TYPE_NULL);
+        passwordWl.setKeyListener(null);
+        passwordWl.setOnClickListener(v -> WordlistPickerDialog.show(context, activity, core,
+                context.getString(R.string.hydra_pick_passwords),
+                new WordlistCategory[] { WordlistCategory.PASSWORD, WordlistCategory.WIFI },
+                passwordList[0] == null ? null : passwordList[0].getName(),
+                wl -> {
+                    passwordList[0] = wl;
+                    passwordWl.setText(wl.getName(), false);
+                }));
 
         final String[] selectedService = { "ssh" };
         serviceGroup.setOnCheckedStateChangeListener((group, checkedIds) -> {
@@ -233,8 +246,8 @@ public final class HydraDialog {
             String port = textOf(portField);
             String singleL = textOf(singleLogin);
             String singleP = textOf(singlePassword);
-            String wlL = textOf(loginWl);
-            String wlP = textOf(passwordWl);
+            String wlL = loginList[0] == null ? "" : wordlistStore.guestPathQuoted(loginList[0]);
+            String wlP = passwordList[0] == null ? "" : wordlistStore.guestPathQuoted(passwordList[0]);
             boolean singleMode = modeSingle.isChecked();
 
             if (service.length() < 2 || host.length() < 3) {

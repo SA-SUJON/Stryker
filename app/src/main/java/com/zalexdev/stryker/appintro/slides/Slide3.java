@@ -31,6 +31,7 @@ import com.google.android.material.progressindicator.LinearProgressIndicator;
 import com.zalexdev.stryker.BuildConfig;
 import com.zalexdev.stryker.R;
 import com.zalexdev.stryker.appintro.install.InstallStage;
+import com.zalexdev.stryker.appintro.install.InstallLogDialog;
 import com.zalexdev.stryker.appintro.install.LogAdapter;
 import com.zalexdev.stryker.appintro.install.LogLevel;
 import com.zalexdev.stryker.appintro.install.LogLine;
@@ -39,6 +40,8 @@ import com.zalexdev.stryker.engine.GuestCore;
 import com.zalexdev.stryker.ota.CoreDownloader;
 import com.zalexdev.stryker.ota.RemoteManifest;
 import com.zalexdev.stryker.ota.VerifiedDownloader;
+import com.zalexdev.stryker.appintro.AppIntroActivity;
+import com.zalexdev.stryker.appintro.IntroPage;
 import com.zalexdev.stryker.utils.Core;
 
 import java.io.File;
@@ -46,7 +49,7 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.Locale;
 
-public class Slide3 extends Fragment {
+public class Slide3 extends Fragment implements IntroPage {
 
     @SuppressLint("SdCardPath")
     private static final String DOWNLOADED_CHROOT_PATH =
@@ -64,22 +67,16 @@ public class Slide3 extends Fragment {
     private ImageView statusIcon;
     private ProgressBar statusSpinner;
 
-    private LinearLayout downloadBlock;
     private LinearProgressIndicator progress;
     private TextView downloadText;
 
-    private TextView stagesHeader;
-    private LinearLayout stagesContainer;
-    private View stagesCard;
-
-    private TextView logHeader;
-    private View logCard;
-    private RecyclerView logRecycler;
     private LogAdapter logAdapter;
+    private MaterialButton detailsToggle;
+    private com.airbnb.lottie.LottieAnimationView working;
+    private InstallLogDialog logDialog;
+    private boolean started;
 
-    private MaterialButton autoInstallButton;
-
-    private final EnumMap<InstallStage, StageRow> stageRows = new EnumMap<>(InstallStage.class);
+    private boolean failed = false;
 
     private NotificationCompat.Builder notification;
     private NotificationManager notificationManager;
@@ -103,44 +100,53 @@ public class Slide3 extends Fragment {
         statusIcon = view.findViewById(R.id.status_icon);
         statusSpinner = view.findViewById(R.id.status_spinner);
 
-        downloadBlock = view.findViewById(R.id.download_block);
         progress = view.findViewById(R.id.slide_install_progress);
         downloadText = view.findViewById(R.id.download_text);
 
-        stagesHeader = view.findViewById(R.id.stages_header);
-        stagesContainer = view.findViewById(R.id.stages_container);
-        stagesCard = view.findViewById(R.id.stages_card);
-
-        logHeader = view.findViewById(R.id.log_header);
-        logCard = view.findViewById(R.id.log_card);
-        logRecycler = view.findViewById(R.id.log_recycler);
-        logRecycler.setLayoutManager(new LinearLayoutManager(context));
         logAdapter = new LogAdapter(context);
-        logRecycler.setAdapter(logAdapter);
-
-        autoInstallButton = view.findViewById(R.id.login);
-
-        buildStageRows(inflater);
-
-        autoInstallButton.setOnClickListener(v -> startInstall());
+        working = view.findViewById(R.id.install_working);
+        com.zalexdev.stryker.appintro.IntroLayout.centerOn(
+                working, view.findViewById(R.id.install_eyebrow));
+        detailsToggle = view.findViewById(R.id.install_details_toggle);
+        detailsToggle.setOnClickListener(v -> showLog());
         return view;
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (!started) startInstall();
+    }
+
+    @Override
+    public void onDestroyView() {
+        if (logDialog != null) logDialog.dismiss();
+        logDialog = null;
+        super.onDestroyView();
+    }
+
+    private void showLog() {
+        if (logDialog != null && logDialog.isShowing()) return;
+        logDialog = InstallLogDialog.show(context, logAdapter);
+    }
+
+    private void closeLog() {
+        if (logDialog != null) logDialog.dismiss();
+        logDialog = null;
     }
 
     @SuppressLint("SdCardPath")
     private void startInstall() {
-        autoInstallButton.setVisibility(View.INVISIBLE);
-        stagesHeader.setVisibility(View.VISIBLE);
-        stagesContainer.setVisibility(View.VISIBLE);
-        stagesCard.setVisibility(View.VISIBLE);
-        logHeader.setVisibility(View.VISIBLE);
-        logCard.setVisibility(View.VISIBLE);
-        logRecycler.setVisibility(View.VISIBLE);
-        resetStages();
+        started = true;
+        failed = false;
+        refreshChrome();
         setStatus(StatusKind.RUNNING, "Stryker chroot", "Starting...");
         log(LogLevel.INFO, "Architecture: arm64-v8a");
         log(LogLevel.INFO, "Stryker " + BuildConfig.VERSION_NAME + " · build " + BuildConfig.VERSION_CODE);
-        if (activity instanceof com.zalexdev.stryker.appintro.AppIntroActivity
-                && ((com.zalexdev.stryker.appintro.AppIntroActivity) activity).isMigration()) {
+        if (activity instanceof AppIntroActivity && ((AppIntroActivity) activity).isUpdate()) {
+            log(LogLevel.STEP, getString(R.string.setup_update_body));
+        }
+        if (activity instanceof AppIntroActivity && ((AppIntroActivity) activity).isMigration()) {
             log(LogLevel.WARN, "An older Linux system is installed. It will be unmounted and "
                     + "replaced with the Debian rootfs; installed packages are not carried over.");
         }
@@ -150,8 +156,7 @@ public class Slide3 extends Fragment {
             log(LogLevel.STEP, "Preparing storage layout");
             if (!clear()) {
                 markStage(InstallStage.PREPARING, RowState.FAILED);
-                failWith("The previous Linux system is still mounted and could not be detached — "
-                        + "reboot the device and run the install again");
+                failWith("The previous Linux system is still mounted. Reboot and install again.");
                 return;
             }
             markStage(InstallStage.PREPARING, RowState.DONE);
@@ -167,7 +172,7 @@ public class Slide3 extends Fragment {
             if (downloadChroot(chrootAsset)) {
                 markStage(InstallStage.DOWNLOADING, RowState.DONE);
                 log(LogLevel.SUCCESS, "Download complete");
-                runOnUi(() -> downloadBlock.setVisibility(View.GONE));
+                runOnUi(() -> downloadText.setText(""));
 
                 markStage(InstallStage.UNPACKING, RowState.ACTIVE);
                 log(LogLevel.STEP, "Extracting archive into /data/local/stryker");
@@ -235,7 +240,7 @@ public class Slide3 extends Fragment {
             } else {
                 markStage(InstallStage.DOWNLOADING, RowState.FAILED);
                 notificationManager.cancel(NOTIFICATION_ID);
-                failWith("Download failed — check internet connection");
+                failWith("Download failed — check the connection");
             }
         }).start();
     }
@@ -245,10 +250,17 @@ public class Slide3 extends Fragment {
         log(LogLevel.ERROR, reason);
         runOnUi(() -> {
             progress.setIndeterminate(false);
-            downloadBlock.setVisibility(View.GONE);
-            autoInstallButton.setText(R.string.try_again);
-            autoInstallButton.setVisibility(View.VISIBLE);
+            failed = true;
+            started = false;
+            showLog();
+            refreshChrome();
         });
+    }
+
+    private void refreshChrome() {
+        if (activity instanceof AppIntroActivity) {
+            ((AppIntroActivity) activity).refreshPrimary();
+        }
     }
 
     private long downloadStartMs;
@@ -256,10 +268,9 @@ public class Slide3 extends Fragment {
     @SuppressLint({"SdCardPath", "SetTextI18n"})
     private boolean downloadChroot(RemoteManifest.Asset asset) {
         runOnUi(() -> {
-            downloadBlock.setVisibility(View.VISIBLE);
             progress.setIndeterminate(true);
             progress.setVisibility(View.VISIBLE);
-            downloadText.setText("Connecting...");
+            downloadText.setText("Connecting…");
         });
         notification = new NotificationCompat.Builder(context, context.getResources().getString(R.string.notification_channel_updater))
                 .setOngoing(true)
@@ -349,9 +360,6 @@ public class Slide3 extends Fragment {
         core.chmodFolder("/data/data/com.zalexdev.stryker/files/");
         core.createFolder(core.getStorage() + "/Stryker/");
         core.createFolder("/data/local/stryker");
-        // Any live mount under the chroot root counts, not just a fully assembled one: a chroot
-        // from before 4.5R binds the whole /sdcard inside itself, and both the extract below and
-        // purgeChroot would otherwise run straight across it into the user's real storage.
         boolean anyMount = !core.mountsUnder(Core.CHROOT_ROOT).isEmpty();
         if (anyMount || core.isMounted() || core.checkFolder(Core.CHROOT_ROOT + "/bin")) {
             log(LogLevel.STEP, "Removing the previous Linux system");
@@ -447,9 +455,7 @@ public class Slide3 extends Fragment {
     private void log(LogLevel level, String text) {
         runOnUi(() -> {
             logAdapter.append(new LogLine(level, text));
-            if (logAdapter.size() > 0) {
-                logRecycler.scrollToPosition(logAdapter.size() - 1);
-            }
+            if (logDialog != null && logDialog.isShowing()) logDialog.scrollToEnd();
         });
     }
 
@@ -460,6 +466,12 @@ public class Slide3 extends Fragment {
         runOnUi(() -> {
             statusTitle.setText(title);
             statusSubtitle.setText(subtitle);
+            if (working != null) {
+                boolean busy = kind == StatusKind.RUNNING;
+                working.setVisibility(busy ? View.VISIBLE : View.GONE);
+                if (busy) working.playAnimation(); else working.cancelAnimation();
+            }
+            if (logDialog != null && logDialog.isShowing()) logDialog.setState(subtitle);
             switch (kind) {
                 case SUCCESS:
                     statusSpinner.setVisibility(View.GONE);
@@ -487,94 +499,25 @@ public class Slide3 extends Fragment {
 
     private enum RowState { PENDING, ACTIVE, DONE, FAILED }
 
-    private void buildStageRows(LayoutInflater inflater) {
-        stagesContainer.removeAllViews();
-        stageRows.clear();
-        for (InstallStage stage : InstallStage.values()) {
-            View row = inflater.inflate(R.layout.install_stage_row, stagesContainer, false);
-            TextView title = row.findViewById(R.id.stage_title);
-            ImageView icon = row.findViewById(R.id.stage_icon);
-            ProgressBar spinner = row.findViewById(R.id.stage_spinner);
-            FrameLayout indicator = row.findViewById(R.id.stage_indicator);
-            title.setText(stage.title);
-            StageRow handles = new StageRow(title, icon, spinner, indicator);
-            applyRowState(handles, RowState.PENDING);
-            stageRows.put(stage, handles);
-            stagesContainer.addView(row);
-        }
+    private void markStage(InstallStage stage, RowState newState) {
+        if (newState == RowState.ACTIVE) runOnUi(() -> statusSubtitle.setText(stage.title));
     }
 
     private void resetStages() {
-        runOnUi(() -> {
-            for (StageRow row : stageRows.values()) {
-                applyRowState(row, RowState.PENDING);
-            }
-        });
     }
 
-    private void markStage(InstallStage stage, RowState newState) {
-        runOnUi(() -> {
-            StageRow row = stageRows.get(stage);
-            if (row == null) return;
-            applyRowState(row, newState);
-            if (newState == RowState.ACTIVE) {
-                statusSubtitle.setText(stage.title);
-            }
-        });
+    @Override
+    public boolean primaryVisible() {
+        return failed;
     }
 
-    private void applyRowState(StageRow row, RowState state) {
-        int color;
-        switch (state) {
-            case ACTIVE:
-                color = ContextCompat.getColor(context, R.color.stryker_accent);
-                row.spinner.setVisibility(View.VISIBLE);
-                row.icon.setVisibility(View.GONE);
-                row.title.setTypeface(null, android.graphics.Typeface.BOLD);
-                break;
-            case DONE:
-                color = ContextCompat.getColor(context, R.color.green);
-                row.spinner.setVisibility(View.GONE);
-                row.icon.setVisibility(View.VISIBLE);
-                row.icon.setImageResource(R.drawable.done);
-                row.icon.setColorFilter(color, PorterDuff.Mode.SRC_IN);
-                row.title.setTypeface(null, android.graphics.Typeface.NORMAL);
-                break;
-            case FAILED:
-                color = ContextCompat.getColor(context, R.color.red);
-                row.spinner.setVisibility(View.GONE);
-                row.icon.setVisibility(View.VISIBLE);
-                row.icon.setImageResource(R.drawable.error);
-                row.icon.setColorFilter(color, PorterDuff.Mode.SRC_IN);
-                row.title.setTypeface(null, android.graphics.Typeface.BOLD);
-                break;
-            case PENDING:
-            default:
-                color = ContextCompat.getColor(context, R.color.grey);
-                row.spinner.setVisibility(View.GONE);
-                row.icon.setVisibility(View.GONE);
-                row.title.setTypeface(null, android.graphics.Typeface.NORMAL);
-                break;
-        }
-        row.title.setTextColor(color);
-        if (row.indicator.getBackground() != null) {
-            row.indicator.getBackground().mutate()
-                    .setColorFilter(color, PorterDuff.Mode.SRC_IN);
-            row.indicator.getBackground().setAlpha(60);
-        }
+    @Override
+    public CharSequence primaryLabel(Context context) {
+        return context.getString(R.string.intro_action_retry);
     }
 
-    private static final class StageRow {
-        final TextView title;
-        final ImageView icon;
-        final ProgressBar spinner;
-        final FrameLayout indicator;
-
-        StageRow(TextView title, ImageView icon, ProgressBar spinner, FrameLayout indicator) {
-            this.title = title;
-            this.icon = icon;
-            this.spinner = spinner;
-            this.indicator = indicator;
-        }
+    @Override
+    public void onPrimary() {
+        startInstall();
     }
 }

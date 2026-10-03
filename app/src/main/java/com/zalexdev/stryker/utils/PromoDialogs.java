@@ -20,8 +20,10 @@ public final class PromoDialogs {
     private static final String KEY_GITHUB = "github_done";
     private static final String KEY_BLOG = "blog_done";
 
-    private static final String GITHUB_URL = "https://github.com/zalexdev/strykerapp";
-    private static final String BLOG_URL = "https://zalexdev.com";
+    public static final String KEY_MUTED = "promo_muted";
+
+    private static final String GITHUB_URL = Links.GITHUB;
+    private static final String BLOG_URL = Links.BLOG;
 
     private static final int MIN_LAUNCHES = 3;
     private static final int SHOW_PERCENT = 30;
@@ -36,6 +38,9 @@ public final class PromoDialogs {
 
     public static void maybeShow(Activity activity) {
         if (activity == null || activity.isFinishing() || shownThisSession) {
+            return;
+        }
+        if (new Core(activity).getBoolean(KEY_MUTED)) {
             return;
         }
         SharedPreferences prefs = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
@@ -71,13 +76,11 @@ public final class PromoDialogs {
 
     private static void show(Activity activity, SharedPreferences prefs, String key,
                              int titleRes, int messageRes, int actionRes, String url) {
+        prefs.edit().putBoolean(key, true).apply();
         new MaterialAlertDialogBuilder(activity)
                 .setTitle(titleRes)
                 .setMessage(messageRes)
-                .setPositiveButton(actionRes, (dialog, which) -> {
-                    prefs.edit().putBoolean(key, true).apply();
-                    openUrl(activity, url);
-                })
+                .setPositiveButton(actionRes, (dialog, which) -> openUrl(activity, url))
                 .setNegativeButton(R.string.promo_later, null)
                 .show();
     }

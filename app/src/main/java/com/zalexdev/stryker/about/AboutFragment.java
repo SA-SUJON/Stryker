@@ -28,8 +28,6 @@ import java.util.List;
 
 public class AboutFragment extends Fragment {
 
-    private static final String SITE_URL = "https://zalexdev.com";
-    private static final String GITHUB_URL = "https://github.com/zalexdev/strykerapp";
 
     private float entranceTranslation;
 
@@ -56,11 +54,21 @@ public class AboutFragment extends Fragment {
             version.setText("v" + BuildConfig.VERSION_NAME);
         }
 
-        view.findViewById(R.id.about_link_site).setOnClickListener(v -> openUrl(SITE_URL));
-        view.findViewById(R.id.about_link_github).setOnClickListener(v -> openUrl(GITHUB_URL));
+        view.findViewById(R.id.about_link_site).setOnClickListener(
+                v -> openUrl(com.zalexdev.stryker.utils.Links.SITE));
+        view.findViewById(R.id.about_link_github).setOnClickListener(
+                v -> openUrl(com.zalexdev.stryker.utils.Links.GITHUB));
+        view.findViewById(R.id.about_link_blog).setOnClickListener(
+                v -> openUrl(com.zalexdev.stryker.utils.Links.BLOG));
+        view.findViewById(R.id.about_link_chat).setOnClickListener(
+                v -> openUrl(com.zalexdev.stryker.utils.Links.CHAT));
         view.findViewById(R.id.about_oss_licenses).setOnClickListener(v -> {
             if (getContext() == null) return;
             startActivity(new Intent(getContext(), LicenseActivity.class));
+        });
+        view.findViewById(R.id.about_thanks).setOnClickListener(v -> {
+            if (getContext() == null) return;
+            startActivity(new Intent(getContext(), ThanksActivity.class));
         });
 
         playEntranceAnimation(view);
@@ -104,8 +112,11 @@ public class AboutFragment extends Fragment {
                 R.id.about_label_links,
                 R.id.about_link_site,
                 R.id.about_link_github,
+                R.id.about_link_blog,
+                R.id.about_link_chat,
                 R.id.about_label_legal,
                 R.id.about_oss_licenses,
+                R.id.about_thanks,
                 R.id.about_footer
         };
 

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="setup_caps_title">Engine check</string>
+    <string name="setup_caps_subtitle">Finding the engine that runs on this device.</string>
+    <string name="setup_caps_starting">Starting…</string>
+    <string name="setup_caps_running">Checking %1$s…</string>
+    <string name="setup_caps_continue">Continue</string>
+    <string name="setup_caps_skip">Choose manually</string>
+    <string name="setup_caps_done">Done</string>
+
+    <string name="setup_verdict_root">Root engine</string>
+    <string name="setup_verdict_uml">UML-ARM64</string>
+    <string name="setup_verdict_qemu">Virtual machine</string>
+    <string name="setup_verdict_none">No supported engine</string>
+
+    <string name="setup_recommended_badge">Recommended</string>
+    <string name="engine_uml_blocked">Unavailable — the kernel will not run here</string>
+
+    <string name="setup_install_trying">Starting %1$s…</string>
+    <string name="setup_install_fallback">%1$s did not work here. Trying %2$s.</string>
+    <string name="setup_install_fallback_title">Switching engine</string>
+    <string name="setup_install_all_failed_title">No engine booted</string>
+    <string name="setup_install_all_failed_body">Stryker needs one to run commands. Continue anyway, or check the log.</string>
+    <string name="setup_install_manual">Continue anyway</string>
+    <string name="setup_install_offline_title">No connection</string>
+    <string name="setup_install_offline_body">The engine downloads from GitHub. Connect and retry.</string>
+
+    <string name="setup_update_title">Updating the engine</string>
+    <string name="setup_update_body">This release boots a different Linux system. The old one is removed and the new one installed now; your settings are kept.</string>
+    <string name="setup_update_freed">Removed the previous image — %1$s freed</string>
+
+    <string name="setup_gate_title">Engine did not start</string>
+    <string name="setup_gate_body">%1$s failed to boot. Switching to %2$s and reinstalling.</string>
+    <string name="setup_gate_action">Reinstall</string>
+    <string name="setup_gate_dead_body">No engine boots on this device. Stryker cannot run without one.</string>
+    <string name="setup_gate_retry">Try again</string>
+    <string name="setup_gate_quit">Close</string>
+
+</resources>

@@ -10,14 +10,11 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
 import com.google.android.material.button.MaterialButton;
@@ -58,6 +55,7 @@ public class SettingsHomeFragment extends Fragment {
         SwitchMaterial hide = view.findViewById(R.id.hide);
         SwitchMaterial autoScan = view.findViewById(R.id.autoscan_switch);
         SwitchMaterial autoWifi = view.findViewById(R.id.autowifi_switch);
+        SwitchMaterial promo = view.findViewById(R.id.promo_switch);
         SwitchMaterial autoBanner = view.findViewById(R.id.banner_detect);
         SwitchMaterial pixieIfaceDown = view.findViewById(R.id.pixie_iface_down_switch);
         LinearLayout pixieIfaceDownRow = view.findViewById(R.id.pixie_iface_down_row);
@@ -65,6 +63,7 @@ public class SettingsHomeFragment extends Fragment {
         View internalDeauthDivider = view.findViewById(R.id.internal_deauth_divider);
         SwitchMaterial internalDeauth = view.findViewById(R.id.internal_deauth_switch);
         LinearLayout autoWifiRow = view.findViewById(R.id.autowifi_row);
+        LinearLayout promoRow = view.findViewById(R.id.promo_row);
         LinearLayout saveApsRow = view.findViewById(R.id.save_aps_row);
         LinearLayout autoScanRow = view.findViewById(R.id.autoscan_row);
         LinearLayout bannerRow = view.findViewById(R.id.banner_row);
@@ -98,12 +97,16 @@ public class SettingsHomeFragment extends Fragment {
         autoWifi.setOnCheckedChangeListener((btn, b) -> core.putBoolean("wifi", b));
         autoScan.setOnCheckedChangeListener((btn, b) -> core.putBoolean("autoScan", b));
 
+        promo.setChecked(!core.getBoolean(
+                com.zalexdev.stryker.utils.PromoDialogs.KEY_MUTED));
+        promo.setOnCheckedChangeListener((btn, b) -> core.putBoolean(
+                com.zalexdev.stryker.utils.PromoDialogs.KEY_MUTED, !b));
+        bindRowToSwitch(promoRow, promo);
         bindRowToSwitch(autoWifiRow, autoWifi);
         bindRowToSwitch(saveApsRow, saveAps);
         bindRowToSwitch(pixieIfaceDownRow, pixieIfaceDown);
         bindRowToSwitch(internalDeauthRow, internalDeauth);
         if (core.isRootless()) {
-            // The internal radio doesn't exist in the rootless VM — the toggle has no effect there
             internalDeauthRow.setVisibility(View.GONE);
             internalDeauthDivider.setVisibility(View.GONE);
         }
@@ -134,12 +137,14 @@ public class SettingsHomeFragment extends Fragment {
 
         LinearLayout engineSection = view.findViewById(R.id.engine_section);
         LinearLayout vmSettingsRow = view.findViewById(R.id.vm_settings_row);
-        if (core.isRootless()) {
+        boolean wifiGuest = com.zalexdev.stryker.engine.WifiEngine.armed(core);
+        if (core.isRootless() || wifiGuest) {
             engineSection.setVisibility(View.VISIBLE);
             vmSettingsRow.setOnClickListener(v -> openSub(new VmSettingsFragment(), "vm"));
         } else {
             engineSection.setVisibility(View.GONE);
         }
+        bindWifiEngineRow(view, wifiGuest);
 
         if (core.isRootless()) {
             unmountLayout.setVisibility(View.GONE);
@@ -148,6 +153,39 @@ public class SettingsHomeFragment extends Fragment {
             unmountLayout.setOnClickListener(v -> confirmUnmount());
             deleteLayout.setOnClickListener(v -> confirmDelete());
         }
+    }
+
+    private void bindWifiEngineRow(View view, boolean armed) {
+        View card = view.findViewById(R.id.wifi_engine_card);
+        View row = view.findViewById(R.id.wifi_engine_row);
+        android.widget.TextView state = view.findViewById(R.id.wifi_engine_state);
+        if (card == null || row == null || state == null) return;
+        if (!armed) {
+            card.setVisibility(View.GONE);
+            return;
+        }
+        card.setVisibility(View.VISIBLE);
+        com.zalexdev.stryker.engine.EngineType type =
+                com.zalexdev.stryker.engine.WifiEngine.configured(core);
+        String name = getString(type == com.zalexdev.stryker.engine.EngineType.UML
+                ? R.string.engine_uml_name : R.string.engine_vm_name);
+        state.setText(getString(R.string.wifi_guest_settings_on, name));
+        row.setOnClickListener(v -> confirmWifiEngineOff());
+    }
+
+    private void confirmWifiEngineOff() {
+        if (getContext() == null) return;
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(getContext())
+                .setTitle(R.string.wifi_guest_settings_title)
+                .setMessage(R.string.wifi_guest_turn_off_body)
+                .setPositiveButton(R.string.wifi_guest_turn_off, (d, w) -> {
+                    com.zalexdev.stryker.engine.WifiEngine.disarm(core);
+                    com.zalexdev.stryker.engine.RootlessService.stop(requireContext());
+                    View root = getView();
+                    if (root != null) bindWifiEngineRow(root, false);
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
     }
 
     private void openSub(Fragment f, String tag) {
@@ -225,23 +263,13 @@ public class SettingsHomeFragment extends Fragment {
                 .show();
     }
 
-    private static final int STEP_ACTIVE = 1, STEP_DONE = 2, STEP_FAIL = 3;
-
     private void confirmDelete() {
-        View v = LayoutInflater.from(context).inflate(R.layout.dialog_delete_app, null);
-        androidx.appcompat.app.AlertDialog dialog = new MaterialAlertDialogBuilder(context)
-                .setView(v)
-                .create();
-        if (dialog.getWindow() != null) {
-            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        }
-        v.findViewById(R.id.delete_cancel).setOnClickListener(x -> dialog.dismiss());
-        v.findViewById(R.id.delete_confirm).setOnClickListener(x -> {
-            dialog.dismiss();
-            performDelete();
-        });
-        dialog.setOnShowListener(d -> startPulse(v.findViewById(R.id.delete_hero)));
-        dialog.show();
+        new MaterialAlertDialogBuilder(context)
+                .setTitle(R.string.settings_delete_confirm_title)
+                .setMessage(R.string.settings_delete_confirm_message)
+                .setPositiveButton(R.string.settings_delete_title, (d, w) -> performDelete())
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
     }
 
     private void unmount() {
@@ -257,114 +285,35 @@ public class SettingsHomeFragment extends Fragment {
     }
 
     private void performDelete() {
-        View v = LayoutInflater.from(context).inflate(R.layout.dialog_delete_progress, null);
-        androidx.appcompat.app.AlertDialog dialog = new MaterialAlertDialogBuilder(context)
-                .setView(v)
+        androidx.appcompat.app.AlertDialog progress = new MaterialAlertDialogBuilder(context)
+                .setTitle(R.string.settings_delete_progress_title)
+                .setMessage(R.string.settings_delete_step_unmount)
                 .setCancelable(false)
                 .create();
-        if (dialog.getWindow() != null) {
-            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        }
-        dialog.show();
-        startPulse(v.findViewById(R.id.progress_hero));
-
-        ProgressBar s1 = v.findViewById(R.id.step1_spin);
-        ImageView i1 = v.findViewById(R.id.step1_icon);
-        TextView l1 = v.findViewById(R.id.step1_label);
-        ProgressBar s2 = v.findViewById(R.id.step2_spin);
-        ImageView i2 = v.findViewById(R.id.step2_icon);
-        TextView l2 = v.findViewById(R.id.step2_label);
-        ProgressBar s3 = v.findViewById(R.id.step3_spin);
-        ImageView i3 = v.findViewById(R.id.step3_icon);
-        TextView l3 = v.findViewById(R.id.step3_label);
-        View bar = v.findViewById(R.id.progress_bar);
-        View err = v.findViewById(R.id.progress_error);
-        MaterialButton close = v.findViewById(R.id.progress_close);
-        close.setOnClickListener(x -> dialog.dismiss());
-
-        setStep(s1, i1, l1, STEP_ACTIVE);
+        progress.show();
 
         new Thread(() -> {
-            boolean detached = core.unmountCore();
-            ui(() -> {
-                if (detached) {
-                    setStep(s1, i1, l1, STEP_DONE);
-                    setStep(s2, i2, l2, STEP_ACTIVE);
-                } else {
-                    setStep(s1, i1, l1, STEP_FAIL);
-                    bar.setVisibility(View.GONE);
-                    err.setVisibility(View.VISIBLE);
-                    close.setVisibility(View.VISIBLE);
-                }
-            });
-            if (!detached) return;
-
-            // Guarded: this deletes the parent of the chroot, so a bind left attached anywhere
-            // underneath would be followed into the user's real storage. Stop before uninstalling
-            // if it refuses — an uninstall would leave the mount live with no way to clear it.
-            if (!core.safeDeleteTree("/data/local/stryker")) {
-                ui(() -> {
-                    setStep(s2, i2, l2, STEP_FAIL);
-                    bar.setVisibility(View.GONE);
-                    err.setVisibility(View.VISIBLE);
-                    close.setVisibility(View.VISIBLE);
-                });
+            if (!core.unmountCore()) {
+                stopDelete(progress, R.string.settings_delete_unmount_failed);
                 return;
             }
-            ui(() -> {
-                setStep(s2, i2, l2, STEP_DONE);
-                setStep(s3, i3, l3, STEP_ACTIVE);
-            });
-            try { Thread.sleep(500); } catch (InterruptedException ignored) {}
+            ui(() -> progress.setMessage(getString(R.string.settings_delete_step_wipe)));
+
+            if (!core.safeDeleteTree("/data/local/stryker")) {
+                stopDelete(progress, R.string.settings_delete_wipe_failed);
+                return;
+            }
+            ui(() -> progress.setMessage(getString(R.string.settings_delete_step_uninstall)));
 
             core.customCommand("pm uninstall com.zalexdev.stryker");
-            ui(() -> {
-                setStep(s3, i3, l3, STEP_DONE);
-                bar.setVisibility(View.GONE);
-                close.setVisibility(View.VISIBLE);
-            });
-        }, "stryker-self-destruct").start();
+        }, "stryker-delete").start();
     }
 
-    private void setStep(ProgressBar spin, ImageView icon, TextView label, int state) {
-        switch (state) {
-            case STEP_ACTIVE:
-                spin.setVisibility(View.VISIBLE);
-                icon.setVisibility(View.GONE);
-                label.setTextColor(ContextCompat.getColor(context, R.color.night_contrast));
-                break;
-            case STEP_DONE:
-                spin.setVisibility(View.GONE);
-                icon.setVisibility(View.VISIBLE);
-                icon.setImageResource(R.drawable.done);
-                icon.setColorFilter(ContextCompat.getColor(context, R.color.green));
-                icon.setScaleX(0f);
-                icon.setScaleY(0f);
-                icon.animate().scaleX(1f).scaleY(1f)
-                        .setInterpolator(new android.view.animation.OvershootInterpolator())
-                        .setDuration(320).start();
-                label.setTextColor(ContextCompat.getColor(context, R.color.green));
-                break;
-            case STEP_FAIL:
-                spin.setVisibility(View.GONE);
-                icon.setVisibility(View.VISIBLE);
-                icon.setImageResource(R.drawable.delete);
-                icon.setColorFilter(ContextCompat.getColor(context, R.color.red));
-                label.setTextColor(ContextCompat.getColor(context, R.color.red));
-                break;
-        }
-    }
-
-    private void startPulse(View view) {
-        if (view == null) return;
-        view.animate().scaleX(1.07f).scaleY(1.07f).setDuration(720)
-                .withEndAction(() -> {
-                    if (!view.isAttachedToWindow()) return;
-                    view.animate().scaleX(1f).scaleY(1f).setDuration(720)
-                            .withEndAction(() -> {
-                                if (view.isAttachedToWindow()) startPulse(view);
-                            }).start();
-                }).start();
+    private void stopDelete(androidx.appcompat.app.AlertDialog progress, int reason) {
+        ui(() -> {
+            progress.dismiss();
+            core.toaster(activity, getString(reason));
+        });
     }
 
     private void ui(Runnable r) {

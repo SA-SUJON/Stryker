@@ -6,6 +6,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
 
@@ -55,7 +56,12 @@ public class VNCService extends Service {
                 .setOngoing(true)
                 .setContentIntent(pendingIntent);
 
-        startForeground(33, notification.build());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(33, notification.build(),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+        } else {
+            startForeground(33, notification.build());
+        }
         if (action != null) {
             if (action.equals(ACTION_START)) {
                 port = intent.getStringExtra(EXTRA_PORT);
@@ -118,6 +124,7 @@ public class VNCService extends Service {
         Intent intent = new Intent();
         intent.setAction(ACTION_START);
         intent.addCategory(Intent.CATEGORY_DEFAULT);
+        intent.setPackage(getPackageName());
         sendBroadcast(intent);
 
         core.customChrootCommand("mkdir -p /tmp; setsid nohup vncserver-start -p " + port
@@ -129,16 +136,17 @@ public class VNCService extends Service {
         if (!core.isRootless()) return;
         int p = parsePort(value);
         if (p <= 0) return;
-        boolean ok = core.rootless().forwardPort(p, p);
+        com.zalexdev.stryker.engine.GuestEngine guest = core.guest();
+        boolean ok = guest.forwardPort(p, p);
         core.logger.writeLine(ok
-                ? "VNC port " + p + " forwarded into the VM"
-                : "VNC port " + p + " could not be forwarded (QMP unavailable)", ok ? 2 : 3);
+                ? "VNC port " + p + " forwarded out of " + guest.displayName()
+                : "VNC port " + p + " could not be forwarded", ok ? 2 : 3);
     }
 
     private void closePortForward(String value) {
         if (!core.isRootless()) return;
         int p = parsePort(value);
-        if (p > 0) core.rootless().unforwardPort(p);
+        if (p > 0) core.guest().unforwardPort(p);
     }
 
     private static int parsePort(String value) {
@@ -158,6 +166,7 @@ public class VNCService extends Service {
         Intent intent = new Intent();
         intent.setAction(ACTION_STOP);
         intent.addCategory(Intent.CATEGORY_DEFAULT);
+        intent.setPackage(getPackageName());
         sendBroadcast(intent);
 
         vnc = null;

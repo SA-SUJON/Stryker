@@ -64,15 +64,30 @@
     }
   },
   "app": {
-    "versionCode": 601,
-    "versionName": "6.0.1",
-    "url": "https://github.com/zalexdev/strykerapp/releases/download/6.0.1/StrykerOSS-6.0.1.apk",
-    "sha256": "d57a4c36d8efb24ba51f4ec4d6459097061dea93a383fef02a2dd89368573752",
-    "size": 20892858,
+    "versionCode": 650,
+    "versionName": "6.5.0",
+    "url": "https://github.com/zalexdev/strykerapp/releases/download/6.5/Stryker.6.5.apk",
+    "sha256": "1b23828cca9fcd9aabc2ba9cc7a1c36d867d252623b16f2d9b43b9202cfa3cca",
+    "size": 94220345,
     "mandatory": false,
-    "changelog": "Hotfix over 6.0.\n\nFixed\n- Data loss when upgrading from installs older than 4.5R: the check before deleting the old chroot could miss a still-attached bind and delete through it into internal storage. Detection now covers every layout, and no recursive delete runs while anything is mounted.\n- The install no longer continues after a failed cleanup.\n- Devices without root reported \"no usable tar\" instead of naming the real cause. The pre-check now offers the rootless engine rather than starting an install that cannot finish.\n- Captured handshakes were not moved into the captured folder.\n- Wordlists were not listed in the pickers.\n- The terminal could crash on launch with \"Cannot create component config directory\"."
+    "changelog": "Stryker 6.5. After the update, Stryker installs a new Linux system (about 320 MB).\n\nNew\n- A second Linux engine: UML. It is lighter and starts faster than the virtual machine.\n- Stryker checks your phone and picks the engine for you.\n- Wi-Fi can now run inside Linux, for adapters Android has no driver for. Root still runs everything else.\n- A Wordlists screen: download, make, clean and read wordlists.\n- A hash cracker. Pick a hash, pick a wordlist, press start.\n- A live attack screen with every step and the numbers.\n- The USB screen shows where your adapter stops: port, Android, VM or wlan.\n- You choose which tools you see on the dashboard.\n- \"Send diagnostics\" puts all logs in one file for bug reports.\n- Chinese translation.\n\nChanged\n- New setup screens. Stryker talks to Linux over SSH now.\n- The VM disk grows by itself when it fills up.\n- New look for the dashboard and the settings.\n\nFixed\n- Update from 6.0.x works: the old Linux image is removed and the new one installed. Your settings stay.\n- OnlineHashCrack uploads work again.\n- Deauth on the internal Wi-Fi radio is now a setting you can turn on."
   },
   "news": [
+    {
+      "id": 3,
+      "title": "Stryker 6.5 - UML engine & Wi-Fi in Linux",
+      "description": "A second rootless engine: User Mode Linux boots as a normal process, with no CPU emulation, and Stryker now probes the device and picks the engine itself. Wi-Fi can run inside Linux for adapters Android has no driver for, while root keeps running everything else. Also new: a Wordlists manager, a hash cracker, a live attack monitor, a USB chain that shows where an adapter stops, a customizable dashboard, diagnostics export and a Chinese translation. arm64-v8a only.",
+      "newsDate": "2026-10-03",
+      "newsUrl": "https://github.com/zalexdev/strykerapp/releases/tag/6.5",
+      "imageUrl": "",
+      "pinned": true,
+      "actionbutton1": true,
+      "actionbutton1text": "Open release",
+      "actionbutton1url": "https://github.com/zalexdev/strykerapp/releases/tag/6.5",
+      "actionbutton2": false,
+      "actionbutton2text": "",
+      "actionbutton2url": ""
+    },
     {
       "id": 2,
       "title": "Stryker 6.0 - Rootless engine & Debian",
@@ -80,7 +95,7 @@
       "newsDate": "2026-08-09",
       "newsUrl": "https://github.com/zalexdev/strykerapp/releases/tag/v6.0",
       "imageUrl": "",
-      "pinned": true,
+      "pinned": false,
       "actionbutton1": true,
       "actionbutton1text": "Open release",
       "actionbutton1url": "https://github.com/zalexdev/strykerapp/releases/tag/v6.0",

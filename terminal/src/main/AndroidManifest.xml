@@ -81,7 +81,13 @@
             android:theme="@style/AppTheme.NoActionBar" />
         <service
             android:name=".services.NeoTermService"
-            android:enabled="true" />
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps interactive terminal sessions and their child processes alive while the terminal UI is in the background." />
+        </service>
 
         <meta-data
             android:name="com.sec.android.support.multiwindow"

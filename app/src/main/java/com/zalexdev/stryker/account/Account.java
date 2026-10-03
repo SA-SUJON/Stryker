@@ -42,6 +42,11 @@ public class Account extends Fragment {
         MaterialCardView github = root.findViewById(R.id.github);
         TextView lic = root.findViewById(R.id.lic);
 
+        TextView thanks = root.findViewById(R.id.account_thanks);
+        thanks.setText(getString(R.string.thanks_line,
+                android.text.TextUtils.join(", ",
+                        getResources().getStringArray(R.array.thanks_people))));
+
         github.setOnClickListener(view -> openLink("https://github.com/zalexdev/strykerapp"));
         info.setText(getDeviceName() + "\n" + context.getResources().getString(R.string.plata) + " " + Build.BOARD + "\n" + "Android SDK: " + Build.VERSION.SDK_INT);
         lic.setOnClickListener(v -> activity.startActivity(new Intent(activity, LicenseActivity.class)));

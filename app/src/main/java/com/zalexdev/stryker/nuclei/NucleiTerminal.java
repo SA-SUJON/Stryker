@@ -22,6 +22,7 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.core.content.ContextCompat;
 
 import com.google.android.material.button.MaterialButton;
 import com.zalexdev.stryker.R;
@@ -153,11 +154,8 @@ public class NucleiTerminal extends Fragment {
     public void onResume() {
         super.onResume();
         IntentFilter f = new IntentFilter(NucleiScanService.ACTION_UPDATED);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            requireContext().registerReceiver(onUpdate, f, Context.RECEIVER_NOT_EXPORTED);
-        } else {
-            requireContext().registerReceiver(onUpdate, f);
-        }
+        ContextCompat.registerReceiver(requireContext(), onUpdate, f,
+                ContextCompat.RECEIVER_NOT_EXPORTED);
         handler.postDelayed(pollTick, 1000);
     }
 

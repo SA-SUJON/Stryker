@@ -64,6 +64,14 @@ public final class LogAdapter extends RecyclerView.Adapter<LogAdapter.VH> {
         if (size > 0) notifyItemRangeRemoved(0, size);
     }
 
+    public String asText() {
+        StringBuilder sb = new StringBuilder();
+        for (LogLine line : lines) {
+            sb.append('[').append(line.level.name()).append("] ").append(line.text).append(System.lineSeparator());
+        }
+        return sb.toString();
+    }
+
     public int size() {
         return lines.size();
     }

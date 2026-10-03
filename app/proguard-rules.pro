@@ -92,3 +92,7 @@
 
 -keep class com.topjohnwu.superuser.** { *; }
 -dontwarn com.topjohnwu.superuser.**
+
+-keep class com.jcraft.jsch.** { *; }
+-keepclassmembers class com.jcraft.jsch.** { *; }
+-dontwarn com.jcraft.jsch.**

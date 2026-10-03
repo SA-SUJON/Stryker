@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="engine_uml_blocked">不可用 — 此设备无法运行该内核</string>
+    <string name="setup_caps_continue">继续</string>
+    <string name="setup_caps_done">完成</string>
+    <string name="setup_caps_running">正在检查 %1$s…</string>
+    <string name="setup_caps_skip">手动选择</string>
+    <string name="setup_caps_starting">正在启动…</string>
+    <string name="setup_caps_subtitle">正在确定此设备可以运行的引擎。</string>
+    <string name="setup_caps_title">引擎检测</string>
+    <string name="setup_gate_action">重新安装</string>
+    <string name="setup_gate_body">%1$s 启动失败。正在切换到 %2$s 并重新安装。</string>
+    <string name="setup_gate_dead_body">此设备上没有引擎能够启动。没有引擎，Stryker 无法运行。</string>
+    <string name="setup_gate_quit">关闭</string>
+    <string name="setup_gate_retry">重试</string>
+    <string name="setup_gate_title">引擎未能启动</string>
+    <string name="setup_install_all_failed_body">Stryker 需要一个引擎才能执行命令。您可以继续，或查看日志。</string>
+    <string name="setup_install_all_failed_title">没有引擎启动成功</string>
+    <string name="setup_install_fallback">%1$s 在此不可用。正在尝试 %2$s。</string>
+    <string name="setup_install_fallback_title">正在切换引擎</string>
+    <string name="setup_install_manual">仍然继续</string>
+    <string name="setup_install_offline_title">无网络连接</string>
+    <string name="setup_install_offline_body">引擎需从 GitHub 下载。请连接网络后重试。</string>
+    <string name="setup_install_trying">正在启动 %1$s…</string>
+    <string name="setup_recommended_badge">推荐</string>
+    <string name="setup_update_title">正在更新引擎</string>
+    <string name="setup_update_body">此版本启动的是另一套 Linux 系统。现在会移除旧系统并安装新的；您的设置会保留。</string>
+    <string name="setup_update_freed">已移除旧镜像 — 释放了 %1$s</string>
+    <string name="setup_verdict_none">无受支持的引擎</string>
+    <string name="setup_verdict_qemu">虚拟机</string>
+    <string name="setup_verdict_root">Root 引擎</string>
+    <string name="setup_verdict_uml">UML-ARM64</string>
+</resources>

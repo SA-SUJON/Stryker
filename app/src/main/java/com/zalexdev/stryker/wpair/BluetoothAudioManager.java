@@ -25,7 +25,6 @@ import android.media.MediaRecorder;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.Log;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -38,6 +37,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import com.stryker.terminal.bridge.StrykerLog;
 
 public class BluetoothAudioManager {
 
@@ -133,7 +133,7 @@ public class BluetoothAudioManager {
             a.getProfileProxy(context, profileListener, BluetoothProfile.HEADSET);
             a.getProfileProxy(context, profileListener, BluetoothProfile.A2DP);
         } catch (Exception e) {
-            Log.e(TAG, "init failed", e);
+            StrykerLog.e(TAG, "init failed", e);
             onReady.onReady(false);
         }
     }
@@ -200,7 +200,7 @@ public class BluetoothAudioManager {
                 onStateChange.onState(new AudioState.Error("HFP_MANUAL_REQUIRED"));
             }
         } catch (Exception e) {
-            Log.e(TAG, "connect failed", e);
+            StrykerLog.e(TAG, "connect failed", e);
             onStateChange.onState(new AudioState.Error("Connection error: " + e.getMessage()));
         }
     }
@@ -228,7 +228,7 @@ public class BluetoothAudioManager {
 
             handler.postDelayed(() -> startAudioCapture(pcmFile, m4aFile, onStateChange), 1000);
         } catch (Exception e) {
-            Log.e(TAG, "SCO start failed", e);
+            StrykerLog.e(TAG, "SCO start failed", e);
             onStateChange.onState(new AudioState.Error("SCO error: " + e.getMessage()));
         }
     }
@@ -263,7 +263,7 @@ public class BluetoothAudioManager {
                 Thread t = new Thread(() -> recordAudioLoop(pcmFile, m4aFile, actual), "WpairAudioRecorder");
                 t.start();
             } catch (Exception e) {
-                Log.e(TAG, "capture start failed", e);
+                StrykerLog.e(TAG, "capture start failed", e);
                 onStateChange.onState(new AudioState.Error("Capture error: " + e.getMessage()));
             }
         }
@@ -279,10 +279,10 @@ public class BluetoothAudioManager {
             while (isRecording && local != null && local.getState() == AudioRecord.STATE_INITIALIZED) {
                 int n = local.read(buffer, 0, bufferSize);
                 if (n > 0) out.write(buffer, 0, n);
-                else if (n < 0) { Log.e(TAG, "AudioRecord error: " + n); break; }
+                else if (n < 0) { StrykerLog.e(TAG, "AudioRecord error: " + n); break; }
             }
         } catch (Exception e) {
-            Log.e(TAG, "record loop", e);
+            StrykerLog.e(TAG, "record loop", e);
         } finally {
             try { if (out != null) out.close(); } catch (Exception ignored) {}
         }
@@ -293,7 +293,7 @@ public class BluetoothAudioManager {
             pcmFile.delete();
             finalFile = m4aFile;
         } catch (Exception e) {
-            Log.e(TAG, "m4a convert failed, keep pcm", e);
+            StrykerLog.e(TAG, "m4a convert failed, keep pcm", e);
             finalFile = pcmFile;
         }
 
@@ -414,7 +414,7 @@ public class BluetoothAudioManager {
             startSco(am);
             handler.postDelayed(() -> startAudioPassthrough(onStateChange), 1000);
         } catch (Exception e) {
-            Log.e(TAG, "listen start failed", e);
+            StrykerLog.e(TAG, "listen start failed", e);
             onStateChange.onState(new AudioState.Error("Listen error: " + e.getMessage()));
         }
     }
@@ -476,7 +476,7 @@ public class BluetoothAudioManager {
                 Thread t = new Thread(() -> audioPassthroughLoop(actual), "WpairAudioPassthrough");
                 t.start();
             } catch (Exception e) {
-                Log.e(TAG, "passthrough start failed", e);
+                StrykerLog.e(TAG, "passthrough start failed", e);
                 onStateChange.onState(new AudioState.Error("Passthrough error: " + e.getMessage()));
             }
         }
@@ -502,12 +502,12 @@ public class BluetoothAudioManager {
                         track.write(buffer, 0, n);
                     }
                 } else if (n < 0) {
-                    Log.e(TAG, "passthrough read err " + n);
+                    StrykerLog.e(TAG, "passthrough read err " + n);
                     break;
                 }
             }
         } catch (Exception e) {
-            Log.e(TAG, "passthrough loop", e);
+            StrykerLog.e(TAG, "passthrough loop", e);
         }
         handler.post(() -> {
             if (stateCallback != null) stateCallback.onState(AudioState.Connected.INSTANCE);
@@ -564,7 +564,7 @@ public class BluetoothAudioManager {
                 }
                 am.setMode(AudioManager.MODE_NORMAL);
             } catch (Exception e) {
-                Log.e(TAG, "stop SCO", e);
+                StrykerLog.e(TAG, "stop SCO", e);
             }
         }
 
@@ -575,7 +575,7 @@ public class BluetoothAudioManager {
                 Method disconnect = BluetoothHeadset.class.getMethod("disconnect", BluetoothDevice.class);
                 disconnect.invoke(hs, dev);
             } catch (Exception e) {
-                Log.e(TAG, "HFP disconnect", e);
+                StrykerLog.e(TAG, "HFP disconnect", e);
             }
         }
 
@@ -671,7 +671,8 @@ public class BluetoothAudioManager {
         f.addAction(AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED);
         f.addAction(BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED);
         f.addAction(BluetoothHeadset.ACTION_AUDIO_STATE_CHANGED);
-        context.registerReceiver(scoReceiver, f);
+        androidx.core.content.ContextCompat.registerReceiver(context, scoReceiver, f,
+                androidx.core.content.ContextCompat.RECEIVER_EXPORTED);
     }
 
     private void unregisterScoReceiver() {
@@ -695,7 +696,7 @@ public class BluetoothAudioManager {
             profileListener = null;
             audioManager = null;
         } catch (Exception e) {
-            Log.e(TAG, "release", e);
+            StrykerLog.e(TAG, "release", e);
         }
     }
 }

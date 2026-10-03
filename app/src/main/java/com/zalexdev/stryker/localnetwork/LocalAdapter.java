@@ -512,9 +512,11 @@ public class LocalAdapter extends RecyclerView.Adapter<LocalAdapter.ViewHolder> 
                 public void onNewLine(String line) {
                     if (line.contains("created:")) {
                         new Thread(() -> {
-                            core.createFolder("/sdcard/Stryker/payloads");
+                            core.createFolder(core.guestShare() + "/payloads");
                             String path = line.replaceAll(".*:", "").replace("'[01;33m//", "").replace("[00m'", "").replaceAll("\\s+", "").trim();
-                            core.customChrootCommand("cp " + path + " /sdcard/Stryker/payloads/" + path.split("/")[path.split("/").length - 1].replaceAll(".*\\.", name.getText().toString() + "."));
+                            core.customChrootCommand("cp " + path + " " + core.guestShare()
+                                    + "/payloads/" + path.split("/")[path.split("/").length - 1]
+                                    .replaceAll(".*\\.", name.getText().toString() + "."));
                         }).start();
                     }
                 }

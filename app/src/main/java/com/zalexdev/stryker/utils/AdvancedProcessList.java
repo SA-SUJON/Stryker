@@ -62,7 +62,7 @@ public abstract class AdvancedProcessList {
                 script.append(command).append('\n');
             }
             try {
-                guestSession = core.rootless().openStream(script.toString());
+                guestSession = core.guest().openStream(script.toString());
                 String line;
                 while ((line = guestSession.reader.readLine()) != null) {
                     if (line.startsWith(GuestExec.Session.SENTINEL)) break;

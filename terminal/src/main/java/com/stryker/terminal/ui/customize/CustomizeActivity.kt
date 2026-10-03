@@ -2,7 +2,9 @@ package com.stryker.terminal.ui.customize
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.view.MenuItem
 import android.view.View
 import android.widget.AdapterView
@@ -17,10 +19,9 @@ import com.stryker.terminal.component.config.NeoPreference
 import com.stryker.terminal.component.config.NeoTermPath
 import com.stryker.terminal.component.font.FontComponent
 import com.stryker.terminal.frontend.session.view.TerminalView
-import com.stryker.terminal.utils.getPathOfMediaUri
 import java.io.File
-import java.nio.file.Files
-import java.nio.file.Paths
+import java.io.FileOutputStream
+import java.io.IOException
 
 class CustomizeActivity : BaseCustomizeActivity() {
   private val REQUEST_SELECT_FONT = 22222
@@ -121,35 +122,34 @@ class CustomizeActivity : BaseCustomizeActivity() {
   }
 
   override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-    if (resultCode == RESULT_OK && data != null) {
-      val selected = this.getPathOfMediaUri( data.data)
-      if (selected != null && selected.isNotEmpty()) {
-        when (requestCode) {
-          REQUEST_SELECT_FONT -> installFont(selected)
-          REQUEST_SELECT_COLOR -> installColor(selected)
-        }
+    val uri = data?.data
+    if (resultCode == RESULT_OK && uri != null) {
+      when (requestCode) {
+        REQUEST_SELECT_FONT -> installFileTo(uri, NeoTermPath.FONT_PATH)
+        REQUEST_SELECT_COLOR -> installFileTo(uri, NeoTermPath.COLORS_PATH)
       }
+      setupSpinners()
     }
     super.onActivityResult(requestCode, resultCode, data)
   }
 
-  private fun installColor(selected: String) {
-    installFileTo(selected, NeoTermPath.COLORS_PATH)
-    setupSpinners()
-  }
-
-  private fun installFont(selected: String) {
-    installFileTo(selected, NeoTermPath.FONT_PATH)
-    setupSpinners()
-  }
-
-  private fun installFileTo(file: String, targetDir: String) {
+  private fun installFileTo(uri: Uri, targetDir: String) {
     kotlin.runCatching {
-      val source = File(file)
-      Files.copy(source.toPath(), Paths.get(targetDir, source.name))
+      val name = displayNameOf(uri) ?: throw IOException("No file name for $uri")
+      File(targetDir).mkdirs()
+      val input = contentResolver.openInputStream(uri) ?: throw IOException("Cannot open $uri")
+      input.use { source -> FileOutputStream(File(targetDir, name)).use(source::copyTo) }
     }.onFailure {
       Toast.makeText(this, getString(R.string.error) + ": ${it.localizedMessage}", Toast.LENGTH_LONG).show()
     }
+  }
+
+  private fun displayNameOf(uri: Uri): String? {
+    contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+      val column = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+      if (column != -1 && it.moveToFirst()) return it.getString(column)
+    }
+    return uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotEmpty() }
   }
 
   override fun onOptionsItemSelected(item: MenuItem): Boolean {

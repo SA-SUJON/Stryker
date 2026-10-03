@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="intro_eyebrow_welcome">欢迎</string>
+    <string name="intro_eyebrow_consent">开始之前</string>
+    <string name="intro_eyebrow_check">设备</string>
+    <string name="intro_eyebrow_engine">引擎</string>
+    <string name="intro_eyebrow_access">权限</string>
+    <string name="intro_eyebrow_install">安装</string>
+    <string name="intro_eyebrow_ready">就绪</string>
+
+    <string name="intro_welcome_title">口袋里的\n渗透测试实验室</string>
+    <string name="intro_welcome_body">用手机扫描、审计和破解网络。设置只需几分钟。</string>
+
+    <string name="intro_consent_title">仅限\n授权测试</string>
+    <string name="intro_consent_body">安装任何内容之前，需要您同意三件事。</string>
+
+    <string name="intro_caps_title">正在检查
+此设备</string>
+
+    <string name="intro_engine_title">Stryker\n如何运行</string>
+    <string name="intro_engine_body">已为此设备选好。除非您清楚原因，否则不必更改。</string>
+
+    <string name="intro_perms_title">两项\n权限</string>
+
+    <string name="intro_pcheck_title">此设备上\n哪些功能可用</string>
+    <string name="intro_pcheck_body">在安装任何内容之前，先快速查看硬件。</string>
+
+    <string name="intro_install_title">正在设置</string>
+    <string name="intro_install_body">需要几分钟。您可以离开此页面。</string>
+
+    <string name="intro_ready_title">一切就绪</string>
+
+    <string name="intro_action_next">下一步</string>
+    <string name="intro_action_continue">继续</string>
+    <string name="intro_action_start">开始使用</string>
+    <string name="intro_action_grant">授予权限</string>
+    <string name="intro_action_install">安装</string>
+    <string name="intro_action_launch">启动 Stryker</string>
+    <string name="intro_action_retry">重试</string>
+
+    <string name="intro_show_details">查看日志</string>
+
+    <string name="final_guest_body">Debian 客户机已启动。USB 网卡会自动接入。</string>
+    <string name="final_guest_shell">可从仪表盘打开客户机终端。</string>
+    <string name="final_chroot_body">Debian 工具集已挂载在 %1$s。</string>
+    <string name="final_chroot_shell">可从仪表盘打开终端。</string>
+
+    <string name="consent_authorized">我仅将此工具用于授权测试</string>
+    <string name="consent_responsibility">我承担全部责任</string>
+    <string name="consent_permitted">我只测试自己拥有或获得许可的网络</string>
+
+    <string name="perm_root">Root</string>
+    <string name="perm_root_ok">已授予</string>
+    <string name="perm_root_pending">用于挂载 chroot 和运行特权工具</string>
+    <string name="perm_root_not_needed">客户机引擎不需要</string>
+    <string name="perm_storage">存储</string>
+    <string name="perm_storage_ok">已授予</string>
+    <string name="perm_storage_pending">用于字典、扫描和握手包</string>
+    <string name="perm_battery">电池</string>
+    <string name="perm_battery_ok">已免除优化</string>
+    <string name="perm_battery_pending">让长时间扫描保持运行</string>
+    <string name="perm_denied_title">未授予</string>
+    <string name="intro_action_check_again">重新检查</string>
+
+    <string name="engine_chroot_name">Root</string>
+    <string name="engine_chroot_line">最快。直接使用设备内核和 Wi-Fi。</string>
+    <string name="engine_uml_name">UML-ARM64（实验性）</string>
+    <string name="engine_uml_line">以普通进程运行的 Linux 内核。无需 root。</string>
+    <string name="engine_vm_name">虚拟机</string>
+    <string name="engine_vm_line">基于 QEMU 的完整 Linux 虚拟机。无需 root。</string>
+    <string name="engine_needs_arm64">需要 arm64</string>
+
+    <string name="intro_eyebrow_autosetup">自动配置</string>
+
+    <string name="pcheck_all_ok">一切正常。</string>
+    <string name="pcheck_some_issues">以下功能在此设备上无法使用。</string>
+
+    <string name="perm_root_denied">已拒绝 — 请在 root 管理器中授予</string>
+    <string name="perm_storage_denied">仍未开启 — 请在设置中允许访问所有文件</string>
+    <string name="perm_continue_without_storage">不授予存储权限继续</string>
+
+    <string name="caps_sum_root">已获得 root。无需下载。</string>
+    <string name="caps_sum_uml">无 root。内核可在此运行。</string>
+    <string name="caps_sum_uml_fallback">无 root。内核可在此运行，虚拟机作为后备。</string>
+    <string name="caps_sum_vm">无 root，且内核无法在此启动。</string>
+    <string name="caps_sum_none">此设备无法运行任何引擎。</string>
+    <string name="caps_warn_data">正在使用移动数据。</string>
+    <string name="caps_warn_storage">存储空间紧张。</string>
+    <string name="caps_warn_memory">内存紧张。</string>
+
+    <string name="caps_check_arch">处理器</string>
+    <string name="caps_check_root">root 权限</string>
+    <string name="caps_check_memory">内存</string>
+    <string name="caps_check_storage">存储</string>
+    <string name="caps_check_network">网络</string>
+    <string name="caps_check_uml">UML-ARM64</string>
+    <string name="caps_check_vm">虚拟机</string>
+
+    <string name="pcheck_run">运行检查</string>
+    <string name="pcheck_running">正在检查…</string>
+</resources>

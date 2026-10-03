@@ -34,7 +34,6 @@ import android.os.Vibrator;
 import android.preference.PreferenceManager;
 import android.text.TextUtils;
 import android.text.format.Formatter;
-import android.util.Log;
 import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -87,6 +86,7 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
+import com.stryker.terminal.bridge.StrykerLog;
 
 
 public class Core {
@@ -96,11 +96,9 @@ public class Core {
     public final static String SHELL = "bash";
     public final static String CHROOT_ROOT = "/data/local/stryker/release";
 
-    /** Marker written after a successful chroot install. The name IS the rootfs generation:
-     *  "4.0" is the old Alpine tree, "6.0" the Debian one. */
-    public final static String CHROOT_MARKER_VERSION = "6.0";
+    public final static String CHROOT_MARKER_VERSION = "6.5";
     public final static String CHROOT_MARKER = CHROOT_ROOT + "/" + CHROOT_MARKER_VERSION;
-    private final static String[] LEGACY_CHROOT_MARKERS = {"4.0"};
+    private final static String[] LEGACY_CHROOT_MARKERS = {"6.0", "4.0"};
     public final static String HIDDEN_MAC = "XX:XX:XX:XX:XX:XX";
     public final String versionName = BuildConfig.VERSION_NAME;
     public final int versionInt = BuildConfig.VERSION_CODE;
@@ -113,6 +111,18 @@ public class Core {
     public SQLiteDatabase db;
     public SQLiteDatabase dbCodename;
     public SQLiteDatabase dbAdapters;
+
+    private com.zalexdev.stryker.engine.EngineType engineOverride;
+
+    public Core overrideEngine(com.zalexdev.stryker.engine.EngineType type) {
+        this.engineOverride = type;
+        return this;
+    }
+
+    public com.zalexdev.stryker.engine.EngineType engineOverride() {
+        return engineOverride;
+    }
+
     public Core(Context context) {
 
         SharedPreferences preferences1;
@@ -304,34 +314,34 @@ public class Core {
         }
     }
 
-    /**
-     * The path the app process can use to reach {@code path}, or null when it is not somewhere
-     * the app can read directly.
-     *
-     * Three spellings of the same directory are in use across the codebase: the guest/chroot
-     * path (/sdcard/Stryker/...), the host path (getStorage() + "Stryker/..."), and getShareRoot().
-     * Under root the last two are the same directory, but when rootless the share lives somewhere
-     * else entirely, so both of the first two have to be redirected onto the share root.
-     */
-    public String hostPath(String path) {
-        if (path == null || path.isEmpty()) return null;
-        final String guestRoot = "/sdcard/Stryker";
-        if (path.startsWith(guestRoot)) return getShareRoot() + path.substring(guestRoot.length());
-        String legacyRoot = getStorage() + "Stryker";
-        if (path.startsWith(legacyRoot)) return getShareRoot() + path.substring(legacyRoot.length());
-        if (path.startsWith(getStorage())) return path;
-        return null;
+    public String guestShare() {
+        if (isRootless()) return guest().guestSharePath();
+        return "/sdcard/Stryker";
     }
 
-    /**
-     * Names of the files in {@code parentDir}.
-     *
-     * Shared storage is listed through the app process in every mode, deliberately. A root shell
-     * does not necessarily see /storage/emulated/0 the way the app does — each app gets its own
-     * mount namespace and plain `su` stays outside it, so `ls` can come back empty for a folder
-     * the user is looking at in a file manager. Listing through the app is what makes the UI
-     * agree with the user; only paths the app genuinely cannot read fall through to the shell.
-     */
+    public String hostPath(String path) {
+        if (path == null || path.isEmpty()) return null;
+        String mapped = null;
+        String guestRoot = null;
+        for (String candidate : new String[]{"/sdcard/Stryker", "/host"}) {
+            if (path.equals(candidate) || path.startsWith(candidate + "/")) {
+                guestRoot = candidate;
+                break;
+            }
+        }
+        if (guestRoot != null) {
+            mapped = getShareRoot() + path.substring(guestRoot.length());
+        } else {
+            String legacyRoot = getStorage() + "Stryker";
+            if (path.startsWith(legacyRoot)) {
+                mapped = getShareRoot() + path.substring(legacyRoot.length());
+            } else if (path.startsWith(getStorage())) {
+                mapped = path;
+            }
+        }
+        return reachableByApp(mapped) ? mapped : null;
+    }
+
     public ArrayList<String> getListFiles(String parentDir) {
         String host = hostPath(parentDir);
         if (host != null) {
@@ -377,7 +387,7 @@ public class Core {
     }
     public void updateExploits(){
         customChrootCommand("rm -rf /exploits; mkdir -p /exploits; "
-                + "cp -f /sdcard/Stryker/exploits/* /exploits/ 2>/dev/null; "
+                + "cp -f " + guestShare() + "/exploits/* /exploits/ 2>/dev/null; "
                 + "chmod -R 0755 /exploits", true);
     }
 
@@ -474,10 +484,32 @@ public class Core {
 
     public String getShareRoot() {
         if (isRootless()) {
-            File d = rootless().resolveShareDir();
+            File d = guest().shareDir();
             if (d != null) return d.getAbsolutePath();
+            File ext = context.getExternalFilesDir(null);
+            if (ext != null) return new File(ext, "Stryker").getAbsolutePath();
         }
         return getStorage() + "Stryker";
+    }
+
+    public boolean hasAllFilesAccess() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                return android.os.Environment.isExternalStorageManager();
+            }
+            return context.checkSelfPermission(WRITE_EXTERNAL_STORAGE)
+                    == PackageManager.PERMISSION_GRANTED;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    private boolean reachableByApp(String path) {
+        if (path == null) return false;
+        if (!path.startsWith(getStorage())) return true;
+        if (hasAllFilesAccess()) return true;
+        File ext = context.getExternalFilesDir(null);
+        return ext != null && path.startsWith(ext.getAbsolutePath());
     }
     public final static String PIXIE_HEURISTIC_ASSET = "routes.txt";
     public final static String PIXIE_VERIFIED_ASSET = "pixie_verified.txt";
@@ -701,7 +733,6 @@ public class Core {
         }
         return mounted;
     }
-    /** True when a chroot from before the Debian move is installed. */
     public boolean hasLegacyChroot(){
         if (isRootless()) return false;
         if (checkFile(CHROOT_MARKER)) return false;
@@ -711,19 +742,6 @@ public class Core {
         return false;
     }
 
-    /**
-     * Every mountpoint currently attached at or under {@code path}, read from /proc/mounts.
-     *
-     * This is the gate in front of every recursive delete under the chroot, and it is
-     * deliberately layout-agnostic. isMounted() answers a different question — "is the chroot
-     * fully assembled and usable" — and requires a specific set of mounts, so it reports false
-     * for a chroot that is only partly attached. A half-torn-down chroot is exactly the state
-     * where deleting is most destructive, and it is also what an upgrade from an older Stryker
-     * looks like: releases before 4.5R bound the WHOLE /sdcard at <root>/sdcard instead of
-     * <root>/sdcard/Stryker, so a readiness check that looks for the current layout sees
-     * "not mounted" while the user's entire internal storage is still attached underneath.
-     * Anything at or under the path counts here, whatever its shape.
-     */
     public ArrayList<String> mountsUnder(String path) {
         ArrayList<String> mounts = new ArrayList<>();
         if (path == null || path.isEmpty()) return mounts;
@@ -732,18 +750,12 @@ public class Core {
             if (s == null) continue;
             String[] parts = s.trim().split("\\s+");
             if (parts.length < 2) continue;
-            // /proc/mounts escapes spaces in the target as \040.
             String target = parts[1].replace("\\040", " ");
             if (target.equals(root) || target.startsWith(root + "/")) mounts.add(target);
         }
         return mounts;
     }
 
-    /**
-     * True only when /proc/mounts was actually read. Every caller here is about to delete
-     * something, so an unreadable mount table has to fail closed: no root, a dead su session or
-     * a truncated read would otherwise look identical to "nothing is mounted".
-     */
     private boolean mountTableReadable() {
         for (String s : customCommand("cat /proc/mounts", true)) {
             if (s != null && s.contains(" / ")) return true;
@@ -751,11 +763,6 @@ public class Core {
         return false;
     }
 
-    /**
-     * rm -rf that refuses to run while anything is still mounted at or under the target.
-     * The chroot binds real storage inside itself, so deleting across a live bind walks
-     * straight through it and destroys the user's data instead of the chroot.
-     */
     public boolean safeDeleteTree(String path) {
         if (path == null || path.trim().isEmpty() || path.trim().equals("/")) {
             logger.writeLine("Refusing to delete an empty or root path", 3);
@@ -779,11 +786,6 @@ public class Core {
         return true;
     }
 
-    /**
-     * Unmount and delete the installed rootfs. Refuses to delete while anything is still mounted:
-     * the chroot bind-mounts real storage inside itself, so an rm -rf over a live mount would
-     * wipe the user's data.
-     */
     public boolean purgeChroot(){
         logger.writeLine("Removing the previous chroot", 1);
         unmountCore();
@@ -803,12 +805,10 @@ public class Core {
         return gone;
     }
 
-    /** Runs killroot and reports whether the chroot is genuinely detached afterwards. */
     public Boolean unmountCore(){
         customMegaCommand("/data/data/com.zalexdev.stryker/files/killroot");
         return mountTableReadable() && mountsUnder(CHROOT_ROOT).isEmpty();
     }
-    /** True when the chroot is fully assembled and usable — not a safety check, see mountsUnder. */
     public Boolean isMounted(){
         return isChrootMounted(CHROOT_ROOT);
     }
@@ -889,7 +889,6 @@ public class Core {
         }
     }
 
-    /** True when the last generateSuProcess() could not spawn su at all. See the note there. */
     private volatile boolean suSpawnFailed = false;
 
     public boolean suSpawnFailed() { return suSpawnFailed; }
@@ -900,11 +899,6 @@ public class Core {
             suSpawnFailed = false;
             return process;
         } catch (IOException e) {
-            // No su on this device. Most callers dereference the returned Process without a null
-            // check, so hand back an inert one instead of crashing them — but record the fact.
-            // Without that flag a missing su is indistinguishable from a command that simply
-            // printed nothing, and every failure downstream invents its own reason for the empty
-            // output: that is how "no root" used to surface as "no usable tar".
             suSpawnFailed = true;
             logger.writeLine("su is not available on this device", 3);
             try {
@@ -916,27 +910,53 @@ public class Core {
     }
 
 
-    public boolean checkFile(String path){
-        logger.writeLine("Checking file "+path,1);
+    public enum Presence { YES, NO, UNKNOWN }
+
+    private static final String PROBE_MARK = "__STRYKER_PROBE__";
+    private static final int PROBE_ATTEMPTS = 3;
+    private static final long PROBE_RETRY_MS = 1200;
+
+    private Presence probe(String test, String path) {
+        logger.writeLine("Checking " + ("-d".equals(test) ? "folder " : "file ") + path, 1);
         if (isRootless()) {
-            return new File(path).isFile();
+            File f = new File(path);
+            boolean there = "-d".equals(test) ? f.isDirectory() : f.isFile();
+            return there ? Presence.YES : Presence.NO;
         }
-        return customCommand("[ -f " + path + " ] && echo true || echo false").contains("true");
+        String cmd = "printf '" + PROBE_MARK + "%s\\n' \"$([ " + test + " " + path
+                + " ] && echo 1 || echo 0)\"";
+        for (int attempt = 0; attempt < PROBE_ATTEMPTS; attempt++) {
+            for (String line : customCommand(cmd, true)) {
+                if (line == null) continue;
+                int at = line.indexOf(PROBE_MARK);
+                if (at < 0) continue;
+                String value = line.substring(at + PROBE_MARK.length()).trim();
+                if (value.startsWith("1")) return Presence.YES;
+                if (value.startsWith("0")) return Presence.NO;
+            }
+            if (attempt + 1 < PROBE_ATTEMPTS) {
+                try {
+                    Thread.sleep(PROBE_RETRY_MS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+        logger.writeLine("No answer from su about " + path + " — treating it as unknown", 3);
+        return Presence.UNKNOWN;
+    }
+
+    public Presence probeFile(String path)   { return probe("-f", path); }
+
+    public Presence probeFolder(String path) { return probe("-d", path); }
+
+    public boolean checkFile(String path){
+        return probeFile(path) == Presence.YES;
     }
 
     public boolean checkFolder(String path){
-        boolean ok = false;
-        logger.writeLine("Checking folder "+path,1);
-        if (isRootless()) {
-            return new File(path).isDirectory();
-        }
-        for (String s : customCommand("[ -d " + path + " ] && echo true || echo false")) {
-            if (s.contains("true")) {
-                ok = true;
-                break;
-            }
-        }
-        return ok;
+        return probeFolder(path) == Presence.YES;
     }
     public boolean checkMagiskNotification(){
         reCreateProcess();
@@ -1108,11 +1128,15 @@ public class Core {
         return RootlessEngine.get(context);
     }
 
+    public com.zalexdev.stryker.engine.GuestEngine guest() {
+        return com.zalexdev.stryker.engine.Engines.active(this);
+    }
+
     public ArrayList<String> customChrootCommand(String command)  {
         if (isRootless()) {
             String tool = LogTool.classify(command);
             logger.writeLine("Executing rootless command: " + command, 1, tool);
-            ArrayList<String> out = rootless().exec(command);
+            ArrayList<String> out = guest().exec(command);
             for (String l : out) logger.writeLine(l, 2, tool);
             return out;
         }
@@ -1124,7 +1148,7 @@ public class Core {
 
     public ArrayList<String> customChrootCommand(String command, boolean nolog)  {
         if (isRootless()) {
-            return rootless().exec(command);
+            return guest().exec(command);
         }
         return pumpProcess(generateSuProcess(),
                 EXECUTE + "'" + SHELL + "'\n" + terminated(command) + "exit\n", false, null, false);
@@ -1156,21 +1180,17 @@ public class Core {
             while ((r = in.read(buf)) != -1) os.write(buf, 0, r);
             os.flush();
         } catch (IOException e) {
-            Log.e("Core", "Failed to extract " + BUSYBOX_ASSET, e);
-            //noinspection ResultOfMethodCallIgnored
+            StrykerLog.e("Core", "Failed to extract " + BUSYBOX_ASSET, e);
             tmp.delete();
             return out.length() > 0 && out.canExecute();
         }
         if (tmp.length() <= 0) {
-            //noinspection ResultOfMethodCallIgnored
             tmp.delete();
             return false;
         }
         try { tmp.setExecutable(true, false); } catch (Exception ignored) {}
-        //noinspection ResultOfMethodCallIgnored
         out.delete();
         if (!tmp.renameTo(out)) {
-            //noinspection ResultOfMethodCallIgnored
             tmp.delete();
             return false;
         }
@@ -1195,15 +1215,6 @@ public class Core {
         return null;
     }
 
-    /**
-     * Why tarCommand() came back null, phrased for the user.
-     *
-     * Both probes it runs — the busybox smoke test and `command -v tar` — go through a root
-     * shell, so on a device with no usable su every one of them returns nothing and the chain
-     * reads as "busybox is broken and the system has no tar". That conclusion is wrong: Android
-     * has shipped a toybox tar since 6.0, and a working root shell would have found it. Empty
-     * output there means no shell ran, so say that instead of blaming tar.
-     */
     public String tarFailureReason() {
         if (suSpawnFailed() || !checkRoot()) {
             return "no root access — su did not return a root shell";
@@ -1223,7 +1234,6 @@ public class Core {
                         byte[] buf = new byte[8192]; int r;
                         while ((r = in.read(buf)) != -1) out.write(buf, 0, r);
                     }
-                    //noinspection ResultOfMethodCallIgnored
                     src.delete();
                 }
             } catch (Exception e) {
@@ -1251,13 +1261,11 @@ public class Core {
         if (children != null) {
             for (File c : children) deleteRecursively(c);
         }
-        //noinspection ResultOfMethodCallIgnored
         target.delete();
     }
 
     public void createFolder(@NonNull String folder){
         if (isRootless()) {
-            //noinspection ResultOfMethodCallIgnored
             new File(folder).mkdirs();
             return;
         }
@@ -1286,7 +1294,8 @@ public class Core {
             }
             Cursor cursor = db.rawQuery("select MacPrefix,VendorName from macvendor where MacPrefix LIKE '%"+mac.substring(0,8).toUpperCase(Locale.ROOT)+"%' COLLATE NOCASE", null);
             if (cursor.moveToFirst()) {
-                vendor = cursor.getString(1);
+                String name = cursor.getString(1);
+                if (name != null) vendor = name;
             }
             cursor.close();
 
@@ -1305,7 +1314,11 @@ public class Core {
             Cursor cursor = dbCodename.rawQuery("SELECT manufacture,model FROM codename WHERE codename = '"+codename+"';", null);
 
             if (cursor.moveToFirst()) {
-                model = cursor.getString(0)+" "+cursor.getString(1).replace(cursor.getString(0),"");
+                String make = cursor.getString(0);
+                String name = cursor.getString(1);
+                if (make == null) make = "";
+                if (name == null) name = "";
+                model = (make + " " + (make.isEmpty() ? name : name.replace(make, ""))).trim();
             }
             cursor.close();
 
@@ -1313,20 +1326,15 @@ public class Core {
         } catch (Exception e) {
             e.printStackTrace();
         }
-        try {
-            return toTitleCase(model);
-        } catch (NullPointerException ignored) {
-            return model;
-        }
+        return toTitleCase(model);
     }
-    public static String toTitleCase(String givenString) throws NullPointerException {
-        String[] arr = givenString.toLowerCase(Locale.ROOT).split(" ");
+    public static String toTitleCase(String givenString) {
+        if (givenString == null) return "";
         StringBuilder sb = new StringBuilder();
-        for (String s : arr) {
-            if (s.length() > 1) {
-                sb.append(Character.toUpperCase(s.charAt(0)))
-                        .append(s.substring(1)).append(" ");
-            }
+        for (String word : givenString.toLowerCase(Locale.ROOT).split(" ")) {
+            if (word.isEmpty()) continue;
+            if (sb.length() > 0) sb.append(' ');
+            sb.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
         }
         return sb.toString();
     }
@@ -1407,6 +1415,7 @@ public class Core {
 
     public static String generateString() {return UUID.randomUUID().toString().replace("-", "");}
     public void checkPermission(Activity activity) {
+        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) return;
         if (context.checkSelfPermission(WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(
                     activity,
@@ -1426,16 +1435,20 @@ public class Core {
     }
 
     public void requestLocationPermission(Activity activity) {
-        if (activity == null || hasLocationPermission()) return;
+        if (activity == null) return;
         try {
-            ActivityCompat.requestPermissions(
-                    activity,
-                    new String[]{
-                            android.Manifest.permission.ACCESS_FINE_LOCATION,
-                            android.Manifest.permission.ACCESS_COARSE_LOCATION
-                    },
-                    124
-            );
+            ArrayList<String> wanted = new ArrayList<>();
+            if (!hasLocationPermission()) {
+                wanted.add(android.Manifest.permission.ACCESS_FINE_LOCATION);
+                wanted.add(android.Manifest.permission.ACCESS_COARSE_LOCATION);
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                    && context.checkSelfPermission(android.Manifest.permission.NEARBY_WIFI_DEVICES)
+                    != PackageManager.PERMISSION_GRANTED) {
+                wanted.add(android.Manifest.permission.NEARBY_WIFI_DEVICES);
+            }
+            if (wanted.isEmpty()) return;
+            ActivityCompat.requestPermissions(activity, wanted.toArray(new String[0]), 124);
         } catch (Exception ignored) {
         }
     }
@@ -1443,7 +1456,7 @@ public class Core {
     public void requestAllFilesAccess(Activity activity) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                if (!android.os.Environment.isExternalStorageManager()) {
+                if (!hasAllFilesAccess()) {
                     Intent i = new Intent(
                             android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
                             Uri.parse("package:" + context.getPackageName()));

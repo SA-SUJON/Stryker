@@ -1,25 +1,8 @@
-/*
- * Copyright (C) 2008 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *		http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package com.stryker.terminal;
 
 import android.app.KeyguardManager;
 import android.content.Context;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
@@ -29,6 +12,7 @@ import javax.microedition.khronos.opengles.GL10;
 import java.io.Writer;
 import java.util.ArrayList;
 import java.util.concurrent.Semaphore;
+import com.stryker.terminal.bridge.StrykerLog;
 
 @SuppressWarnings("ALL")
 public class GLSurfaceView_SDL extends SurfaceView implements SurfaceHolder.Callback {
@@ -249,7 +233,7 @@ public class GLSurfaceView_SDL extends SurfaceView implements SurfaceHolder.Call
       int idx = 0;
       int selectidx = -1;
 
-      Log.v("SDL", "Desired GL config: " + "R" + mRedSize + "G" + mGreenSize + "B" + mBlueSize + "A" + mAlphaSize + " depth " + mDepthSize + " stencil " + mStencilSize + " type " + (mIsGles3 ? "GLES3" : mIsGles2 ? "GLES2" : "GLES"));
+      StrykerLog.v("SDL", "Desired GL config: " + "R" + mRedSize + "G" + mGreenSize + "B" + mBlueSize + "A" + mAlphaSize + " depth " + mDepthSize + " stencil " + mStencilSize + " type " + (mIsGles3 ? "GLES3" : mIsGles2 ? "GLES2" : "GLES"));
       for (EGLConfig config : configs) {
         if (config == null)
           continue;
@@ -312,7 +296,7 @@ public class GLSurfaceView_SDL extends SurfaceView implements SurfaceHolder.Call
               String.valueOf(caveat)));
         cfgcur += " nr " + nativeRender;
         cfgcur += " pos " + distance + " (" + dist1 + "," + dist2 + "," + dist3 + "," + dist4 + "," + dist5 + ")";
-        Log.v("SDL", "GL config " + idx + ": " + cfgcur);
+        StrykerLog.v("SDL", "GL config " + idx + ": " + cfgcur);
         if (distance < closestDistance) {
           closestDistance = distance;
           closestConfig = config;
@@ -321,7 +305,7 @@ public class GLSurfaceView_SDL extends SurfaceView implements SurfaceHolder.Call
         }
         idx += 1;
       }
-      Log.v("SDL", "GLSurfaceView_SDL::EGLConfigChooser::chooseConfig(): selected " + selectidx + ": " + cfglog);
+      StrykerLog.v("SDL", "GLSurfaceView_SDL::EGLConfigChooser::chooseConfig(): selected " + selectidx + ": " + cfglog);
       return closestConfig;
     }
 
@@ -331,7 +315,7 @@ public class GLSurfaceView_SDL extends SurfaceView implements SurfaceHolder.Call
       if (egl.eglGetConfigAttrib(display, config, attribute, mValue)) {
         return mValue[0];
       }
-      Log.w("SDL", "GLSurfaceView_SDL::EGLConfigChooser::findConfigAttrib(): attribute doesn't exist: " + attribute);
+      StrykerLog.w("SDL", "GLSurfaceView_SDL::EGLConfigChooser::findConfigAttrib(): attribute doesn't exist: " + attribute);
       return defaultValue;
     }
 
@@ -407,7 +391,7 @@ public class GLSurfaceView_SDL extends SurfaceView implements SurfaceHolder.Call
 
     public void start() {
 
-      Log.v("SDL", "GLSurfaceView_SDL::EglHelper::start(): creating GL context");
+      StrykerLog.v("SDL", "GLSurfaceView_SDL::EglHelper::start(): creating GL context");
       mEgl = (EGL10) EGLContext.getEGL();
 
       mEglDisplay = mEgl.eglGetDisplay(EGL10.EGL_DEFAULT_DISPLAY);
@@ -416,7 +400,7 @@ public class GLSurfaceView_SDL extends SurfaceView implements SurfaceHolder.Call
       mEgl.eglInitialize(mEglDisplay, version);
       mEglConfig = mEGLConfigChooser.chooseConfig(mEgl, mEglDisplay);
       if (mEglConfig == null)
-        Log.e("SDL", "GLSurfaceView_SDL::EglHelper::start(): mEglConfig is NULL");
+        StrykerLog.e("SDL", "GLSurfaceView_SDL::EglHelper::start(): mEglConfig is NULL");
 
       final int EGL_CONTEXT_CLIENT_VERSION = 0x3098;
       final int[] gles2_attrib_list = {EGL_CONTEXT_CLIENT_VERSION, 2, EGL10.EGL_NONE};
@@ -428,13 +412,13 @@ public class GLSurfaceView_SDL extends SurfaceView implements SurfaceHolder.Call
           mEGLConfigChooser.isGles2Required() ? gles2_attrib_list : null);
 
       if (mEglContext == null || mEglContext == EGL10.EGL_NO_CONTEXT)
-        Log.e("SDL", "GLSurfaceView_SDL::EglHelper::start(): mEglContext is EGL_NO_CONTEXT, error: " + mEgl.eglGetError());
+        StrykerLog.e("SDL", "GLSurfaceView_SDL::EglHelper::start(): mEglContext is EGL_NO_CONTEXT, error: " + mEgl.eglGetError());
 
       mEglSurface = null;
     }
 
     public GL createSurface(SurfaceHolder holder) {
-      Log.v("SDL", "GLSurfaceView_SDL::EglHelper::createSurface(): creating GL context");
+      StrykerLog.v("SDL", "GLSurfaceView_SDL::EglHelper::createSurface(): creating GL context");
       if (mEglSurface != null) {
 
         mEgl.eglMakeCurrent(mEglDisplay, EGL10.EGL_NO_SURFACE,
@@ -463,7 +447,7 @@ public class GLSurfaceView_SDL extends SurfaceView implements SurfaceHolder.Call
     }
 
     public void finish() {
-      Log.v("SDL", "GLSurfaceView_SDL::EglHelper::finish(): destroying GL context");
+      StrykerLog.v("SDL", "GLSurfaceView_SDL::EglHelper::finish(): destroying GL context");
       if (mEglSurface != null) {
         mEgl.eglMakeCurrent(mEglDisplay, EGL10.EGL_NO_SURFACE,
           EGL10.EGL_NO_SURFACE,
@@ -548,7 +532,7 @@ public class GLSurfaceView_SDL extends SurfaceView implements SurfaceHolder.Call
             try {
               wait(500);
             } catch (InterruptedException e) {
-              Log.v("SDL", "GLSurfaceView_SDL::GLThread::SwapBuffers(): Who dared to interrupt my slumber?");
+              StrykerLog.v("SDL", "GLSurfaceView_SDL::GLThread::SwapBuffers(): Who dared to interrupt my slumber?");
               Thread.interrupted();
             }
           }
@@ -655,14 +639,14 @@ public class GLSurfaceView_SDL extends SurfaceView implements SurfaceHolder.Call
     }
 
     public void onPause() {
-      Log.v("SDL", "GLSurfaceView_SDL::onPause()");
+      StrykerLog.v("SDL", "GLSurfaceView_SDL::onPause()");
       synchronized (this) {
         mPaused = true;
       }
     }
 
     public void onResume() {
-      Log.v("SDL", "GLSurfaceView_SDL::onResume()");
+      StrykerLog.v("SDL", "GLSurfaceView_SDL::onResume()");
       synchronized (this) {
         mPaused = false;
         notify();
@@ -670,7 +654,7 @@ public class GLSurfaceView_SDL extends SurfaceView implements SurfaceHolder.Call
     }
 
     public void onWindowResize(int w, int h) {
-      Log.v("SDL", "GLSurfaceView_SDL::onWindowResize(): " + w + "x" + h);
+      StrykerLog.v("SDL", "GLSurfaceView_SDL::onWindowResize(): " + w + "x" + h);
       synchronized (this) {
         mWidth = w;
         mHeight = h;
@@ -681,7 +665,7 @@ public class GLSurfaceView_SDL extends SurfaceView implements SurfaceHolder.Call
     }
 
     public void requestExitAndWait() {
-      Log.v("SDL", "GLSurfaceView_SDL::requestExitAndWait()");
+      StrykerLog.v("SDL", "GLSurfaceView_SDL::requestExitAndWait()");
       synchronized (this) {
         mDone = true;
         notify();
@@ -746,7 +730,7 @@ public class GLSurfaceView_SDL extends SurfaceView implements SurfaceHolder.Call
 
     private void flushBuilder() {
       if (mBuilder.length() > 0) {
-        Log.v("GLSurfaceView", mBuilder.toString());
+        StrykerLog.v("GLSurfaceView", mBuilder.toString());
         mBuilder.delete(0, mBuilder.length());
       }
     }

@@ -28,6 +28,7 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.core.content.ContextCompat;
 
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.chip.ChipGroup;
@@ -121,11 +122,8 @@ public class NucleiMain extends Fragment implements TargetsAdapter.Listener {
     public void onResume() {
         super.onResume();
         IntentFilter filter = new IntentFilter(NucleiScanService.ACTION_UPDATED);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            requireContext().registerReceiver(updateReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
-        } else {
-            requireContext().registerReceiver(updateReceiver, filter);
-        }
+        ContextCompat.registerReceiver(requireContext(), updateReceiver, filter,
+                ContextCompat.RECEIVER_NOT_EXPORTED);
         reload();
     }
 

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="wifi_monitor_failed">无法在 %1$s 上启用监听模式。\n\n原因：\n• 芯片组不支持 — 大多数内置的非高通网卡都不支持。\n• 网卡未被检测到或已拔出。\n• 接口正忙、已关闭，或驱动以其他名称暴露它。\n\n解决方法：\n• 设置 → 网络接口：为握手包捕获和解除认证选择另一块网卡。\n• 重新插拔 USB 网卡，然后重新扫描。\n• 使用支持监听模式的网卡（Atheros AR9271、Realtek RTL8812AU / 88XXAU）。\n• 设置 → 自定义监听命令：调整启用监听模式的方式。\n• 如果 Android Wi-Fi 或热点占用了该接口，请将其关闭。</string>
+</resources>

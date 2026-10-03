@@ -8,7 +8,6 @@ import android.media.AudioManager
 import android.media.SoundPool
 import android.os.VibrationEffect
 import android.os.Vibrator
-import android.util.Log
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -28,6 +27,7 @@ import com.stryker.terminal.frontend.completion.CandidatePopupWindow
 import com.stryker.terminal.frontend.session.view.TerminalView
 import com.stryker.terminal.frontend.session.view.TerminalViewClient
 import java.util.*
+import com.stryker.terminal.bridge.StrykerLog
 
 class TermViewClient(val context: Context) :
     TerminalViewClient {
@@ -412,7 +412,7 @@ class TermCompleteListener(var terminalView: TerminalView?) : OnAutoCompleteList
     }
 
     if (BuildConfig.DEBUG) {
-      Log.e(
+      StrykerLog.e(
         "NeoTerm-AC",
         "currentEditing: $textNeedCompletion, " +
           "deleteLength: $deleteLength, completeString: $newText"

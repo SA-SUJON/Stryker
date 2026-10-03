@@ -182,13 +182,10 @@ public class VNCFragment extends Fragment {
         startFilter.addCategory(Intent.CATEGORY_DEFAULT);
         IntentFilter stopFilter = new IntentFilter(VNCService.ACTION_STOP);
         stopFilter.addCategory(Intent.CATEGORY_DEFAULT);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            activity.registerReceiver(mBroadcastReceiver, startFilter, Context.RECEIVER_NOT_EXPORTED);
-            activity.registerReceiver(mBroadcastReceiver, stopFilter, Context.RECEIVER_NOT_EXPORTED);
-        } else {
-            activity.registerReceiver(mBroadcastReceiver, startFilter);
-            activity.registerReceiver(mBroadcastReceiver, stopFilter);
-        }
+        ContextCompat.registerReceiver(activity, mBroadcastReceiver, startFilter,
+                ContextCompat.RECEIVER_NOT_EXPORTED);
+        ContextCompat.registerReceiver(activity, mBroadcastReceiver, stopFilter,
+                ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
     private void wireSettingsDefaults() {
@@ -280,29 +277,25 @@ public class VNCFragment extends Fragment {
         return core.isRootless() ? stageForGuest() : stageForChroot();
     }
 
-    /** The VM only sees the 9p share, so the scripts have to travel through it. */
     private boolean stageForGuest() {
-        java.io.File staging = new java.io.File(core.getShareRoot(), ".stryker-vnc");
-        //noinspection ResultOfMethodCallIgnored
+        com.zalexdev.stryker.engine.GuestEngine guest = core.guest();
+        java.io.File share = guest.shareDir();
+        if (share == null) share = new java.io.File(core.getShareRoot());
+        java.io.File staging = new java.io.File(share, ".stryker-vnc");
         staging.mkdirs();
         if (!stageAsset("install_xfce.sh", new java.io.File(staging, "install.sh"))) return false;
         if (!stageAsset("uninstall_xfce.sh", new java.io.File(staging, "uninstall.sh"))) return false;
+        String from = guest.guestSharePath() + "/.stryker-vnc";
         core.customChrootCommand("mkdir -p " + VNC_DIR + "; "
-                + "cp -f /sdcard/Stryker/.stryker-vnc/install.sh " + VNC_DIR + "/install.sh; "
-                + "cp -f /sdcard/Stryker/.stryker-vnc/uninstall.sh " + VNC_DIR + "/uninstall.sh; "
+                + "cp -f " + from + "/install.sh " + VNC_DIR + "/install.sh; "
+                + "cp -f " + from + "/uninstall.sh " + VNC_DIR + "/uninstall.sh; "
                 + "sed -i 's/\r$//' " + VNC_DIR + "/install.sh " + VNC_DIR + "/uninstall.sh; "
                 + "chmod 0755 " + VNC_DIR + "/install.sh " + VNC_DIR + "/uninstall.sh", true);
         return core.guestFileExists(VNC_DIR + "/install.sh");
     }
 
-    /**
-     * Chroot: never route this through shared storage. From Android 11 the app has no write access
-     * to /sdcard unless the user grants all-files access, and refusing it used to fail the whole
-     * install. The app's own files dir is always writable, and root copies from there.
-     */
     private boolean stageForChroot() {
         java.io.File staging = new java.io.File(context.getFilesDir(), ".stryker-vnc");
-        //noinspection ResultOfMethodCallIgnored
         staging.mkdirs();
         if (!stageAsset("install_xfce.sh", new java.io.File(staging, "install.sh"))) return false;
         if (!stageAsset("uninstall_xfce.sh", new java.io.File(staging, "uninstall.sh"))) return false;
@@ -442,7 +435,6 @@ public class VNCFragment extends Fragment {
         logRecycler.setVisibility(View.VISIBLE);
     }
 
-    /** The stage list and installer output only make sense while installing or after a failure. */
     private void hideInstallSurfaces() {
         stagesHeader.setVisibility(View.GONE);
         stagesCard.setVisibility(View.GONE);
@@ -662,7 +654,6 @@ public class VNCFragment extends Fragment {
     }
 
     private void vncNotInstalled() {
-        // Keep them up after a failed run so the error stays readable.
         if (logAdapter.size() == 0) hideInstallSurfaces();
         install.setVisibility(View.VISIBLE);
         resolutionLayout.setVisibility(View.GONE);

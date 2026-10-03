@@ -14,7 +14,6 @@ import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.os.SystemClock;
-import android.util.Log;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
@@ -38,6 +37,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
+import com.stryker.terminal.bridge.StrykerLog;
 
 public class InstallService extends Service {
 
@@ -47,6 +47,13 @@ public class InstallService extends Service {
     public static final String TOOL_CAMERADAR = "cameradar";
 
     public static final String NUCLEI_TEMPLATES_MARKER = "/root/.config/nuclei/.stryker-templates-ok";
+
+    public static final String NUCLEI_FETCH_TEMPLATES =
+            "export HOME=/root; mkdir -p /root/.config/nuclei; "
+            + "/usr/bin/nuclei -ut >/tmp/nuclei-ut.log 2>&1; "
+            + "if [ -n \"$(find /root/.local/nuclei-templates /root/nuclei-templates "
+            + "-name '*.yaml' 2>/dev/null | head -1)\" ]; then touch "
+            + NUCLEI_TEMPLATES_MARKER + "; fi";
 
     public static final String ACTION_INSTALL = "com.zalexdev.stryker.install.INSTALL";
     public static final String ACTION_CANCEL = "com.zalexdev.stryker.install.CANCEL";
@@ -147,7 +154,7 @@ public class InstallService extends Service {
                 if (tail.size() > MAX_REPLAY_LINES) tail.removeFirst();
             }
         } catch (Exception e) {
-            Log.w("InstallService", "readLog failed: " + e.getMessage());
+            StrykerLog.w("InstallService", "readLog failed: " + e.getMessage());
         }
         return new ArrayList<>(tail);
     }
@@ -253,7 +260,7 @@ public class InstallService extends Service {
                 process.waitFor();
                 shellOk = true;
             } catch (Exception e) {
-                Log.e("InstallService", "install shell crashed", e);
+                StrykerLog.e("InstallService", "install shell crashed", e);
                 tee(tool, "[E] install shell crashed: " + e.getMessage());
             } finally {
                 if (process != null) {
@@ -281,7 +288,7 @@ public class InstallService extends Service {
         try {
             StringBuilder script = new StringBuilder();
             for (String line : commandsFor(tool)) script.append(line).append('\n');
-            s = core.rootless().openStream(script.toString());
+            s = core.guest().openStream(script.toString());
             currentGuest = s;
             String line;
             while ((line = s.reader.readLine()) != null) {
@@ -290,7 +297,7 @@ public class InstallService extends Service {
             }
             return true;
         } catch (Exception e) {
-            Log.e("InstallService", "rootless install crashed", e);
+            StrykerLog.e("InstallService", "rootless install crashed", e);
             tee(tool, "[E] install shell crashed: " + e.getMessage());
             return false;
         } finally {
@@ -329,7 +336,7 @@ public class InstallService extends Service {
                 if (!t.isEmpty()) handleLine(tool, "[E] " + t);
             }
         } catch (Exception e) {
-            Log.d("InstallService", "stderr drained: " + e.getMessage());
+            StrykerLog.d("InstallService", "stderr drained: " + e.getMessage());
         }
     }
 
@@ -349,7 +356,7 @@ public class InstallService extends Service {
                             || core.guestFileExists("/opt/metasploit-framework/msfconsole");
             }
         } catch (Throwable t) {
-            Log.w("InstallService", "verify failed: " + t.getMessage());
+            StrykerLog.w("InstallService", "verify failed: " + t.getMessage());
             return false;
         }
     }
@@ -475,23 +482,30 @@ public class InstallService extends Service {
         c.add("NARCH=linux_arm64; echo \"×Target $NARCH\"");
         c.add("echo ×Resolving latest nuclei release");
         c.add("NURL=$(curl -fsSL https://api.github.com/repos/projectdiscovery/nuclei/releases/latest "
-                + "| tr ',' '\\n' | grep browser_download_url | grep \"$NARCH\" | grep '\\.zip' "
+                + "| tr ',' '\\n' | grep browser_download_url | grep \"$NARCH\" | grep '\\.zip\"' "
                 + "| head -1 | cut -d'\"' -f4)");
         c.add("[ -n \"$NURL\" ] || echo '×Could not resolve a release URL'");
         c.add("echo \"×Downloading $NURL\"");
         c.add("curl -fL --retry 3 --retry-delay 2 -o /tmp/nuclei.zip \"$NURL\"");
         c.add("echo ×Unpacking binary");
-        c.add("unzip -o /tmp/nuclei.zip nuclei -d /usr/bin");
-        c.add("chmod 0755 /usr/bin/nuclei");
-        c.add("rm -f /tmp/nuclei.zip");
+        c.add("rm -rf /tmp/nuclei-x; mkdir -p /tmp/nuclei-x");
+        c.add("unzip -o /tmp/nuclei.zip -d /tmp/nuclei-x");
+        c.add("NBIN=$(find /tmp/nuclei-x -type f -name nuclei 2>/dev/null | head -1)");
+        c.add("[ -n \"$NBIN\" ] || NBIN=$(find /tmp/nuclei-x -type f -size +1M -exec ls -S {} + 2>/dev/null | head -1)");
+        c.add("if [ -n \"$NBIN\" ]; then cp -f \"$NBIN\" /usr/bin/nuclei && chmod 0755 /usr/bin/nuclei; "
+                + "else echo 'nothing that looks like a binary in the archive'; fi");
+        c.add("rm -rf /tmp/nuclei-x /tmp/nuclei.zip");
+        c.add("if [ -x /usr/bin/nuclei ]; then echo '×Binary in place'; "
+                + "else echo '×Binary missing — nothing was deployed'; fi");
         c.add("echo ×Fetching template library");
-        c.add("export HOME=/root; mkdir -p /root/.config/nuclei; "
-                + "if /usr/bin/nuclei -duc -ut >/tmp/nuclei-ut.log 2>&1; then "
-                + "touch " + NUCLEI_TEMPLATES_MARKER + "; fi; tail -8 /tmp/nuclei-ut.log; rm -f /tmp/nuclei-ut.log");
+        c.add("if [ -x /usr/bin/nuclei ]; then " + NUCLEI_FETCH_TEMPLATES
+                + "; tail -8 /tmp/nuclei-ut.log; rm -f /tmp/nuclei-ut.log; fi");
         c.add("if [ -f " + NUCLEI_TEMPLATES_MARKER + " ]; then echo '×Template library ready'; "
-                + "else echo '×Template download failed — the first scan will retry'; fi");
+                + "elif [ -x /usr/bin/nuclei ]; then echo '×Template download failed — the first scan will retry'; "
+                + "else echo '×Templates skipped — no binary'; fi");
         c.add("echo ×Verify nuclei -version");
-        c.add("/usr/bin/nuclei -version 2>&1 | head -3");
+        c.add("if [ -x /usr/bin/nuclei ]; then /usr/bin/nuclei -version 2>&1 | head -3; "
+                + "else echo 'nuclei is not installed'; fi");
         c.add("echo ×Done");
         return c;
     }
@@ -571,7 +585,7 @@ public class InstallService extends Service {
             try (PrintWriter pw = new PrintWriter(new FileWriter(f, true))) {
                 pw.println(line);
             } catch (Exception e) {
-                Log.w("InstallService", "tee failed: " + e.getMessage());
+                StrykerLog.w("InstallService", "tee failed: " + e.getMessage());
             }
         }
         broadcast(tool, line, statusOf(core, tool));
@@ -633,6 +647,11 @@ public class InstallService extends Service {
         } else {
             startForeground(FOREGROUND_NOTIFICATION_ID, n);
         }
+    }
+
+    @Override
+    public void onTimeout(int startId, int fgsType) {
+        stopSelf();
     }
 
     private void updateNotification(String tool, String text) {

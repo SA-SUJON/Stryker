@@ -1,0 +1,16 @@
+[Unit]
+Description=Stryker guest setup (SSH keys, share, regulatory domain)
+DefaultDependencies=no
+After=local-fs.target
+Before=ssh.service sshd.service
+Wants=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/stryker-guest-init
+SuccessExitStatus=0 1
+StandardOutput=journal+console
+
+[Install]
+WantedBy=multi-user.target

@@ -55,7 +55,8 @@ public class LoggerFragment extends Fragment {
     private static final long COUNT_RESYNC_MS = 1500L;
 
     @SuppressLint("SdCardPath")
-    private static final String EXPORT_NAME = "stryker.log";
+    private static final String EXPORT_PREFIX = "stryker";
+    private static final String EXPORT_SUFFIX = ".log";
 
     private Activity activity;
     private Context context;
@@ -438,11 +439,12 @@ public class LoggerFragment extends Fragment {
     }
 
     private File exportToShare(LogFilter snapshot) {
-        File out = new File(context.getFilesDir(), EXPORT_NAME);
+        File out = com.zalexdev.stryker.utils.Exports.fresh(
+                context.getFilesDir(), EXPORT_PREFIX, EXPORT_SUFFIX);
         if (store.export(out, snapshot) < 0) return null;
         File shareDir = new File(core.getShareRoot());
         if (!shareDir.isDirectory() && !shareDir.mkdirs()) return out;
-        File target = new File(shareDir, EXPORT_NAME);
+        File target = new File(shareDir, out.getName());
         try (java.io.InputStream in = new java.io.FileInputStream(out);
              java.io.OutputStream os = new java.io.FileOutputStream(target)) {
             byte[] buf = new byte[8192];

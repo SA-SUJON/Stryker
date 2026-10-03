@@ -298,7 +298,7 @@ public final class VmBenchmark {
         GuestExec.Session session = null;
         try {
             session = GuestExec.open(script);
-            session.socket.setSoTimeout(READ_SLICE_MS);
+            session.setReadTimeout(READ_SLICE_MS);
             char[] chunk = new char[1024];
             while (true) {
                 checkInterrupted();

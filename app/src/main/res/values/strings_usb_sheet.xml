@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="usb_empty_title">Nothing in the port</string>
+    <string name="usb_empty_body">Plug an adapter in.</string>
+    <string name="usb_rescan">Re-scan</string>
+
+    <string name="usb_stage_port">Port</string>
+    <string name="usb_stage_android">Android</string>
+    <string name="usb_stage_vm">VM</string>
+    <string name="usb_stage_wlan">wlan</string>
+
+    <string name="usb_note_nodriver_title">No driver in Android</string>
+    <string name="usb_note_nodriver_body">The phone\'s kernel has no module for this chipset, and one can\'t be added. Run Wi-Fi in a Linux guest that has it.</string>
+    <string name="usb_note_setup_guest">Set up guest</string>
+
+    <string name="usb_note_nonetdev_title">Driver bound, no interface</string>
+    <string name="usb_note_nonetdev_body">%1$s attached to the adapter but never brought an interface up — usually firmware it couldn\'t find.</string>
+
+    <string name="usb_note_guestdown_title">Guest isn\'t running</string>
+    <string name="usb_note_guestdown_body">%1$s has to be up before the adapter can be handed to it.</string>
+
+    <string name="usb_note_phoneholds_title">Android is using this adapter</string>
+    <string name="usb_note_phoneholds_body">The phone\'s own %1$s driver has it. Stryker has to take it away from Android before %2$s can use it, and some kernels refuse — if the handover fails, this is why.</string>
+
+    <string name="usb_note_noguestdriver_title">No driver in the guest</string>
+    <string name="usb_note_noguestdriver_body">%1$s has no module for this chipset, so no interface came up.</string>
+    <string name="usb_note_search">How to install</string>
+
+    <string name="usb_row_interface">Interface</string>
+    <string name="usb_row_mac">MAC</string>
+    <string name="usb_row_driver">Driver</string>
+    <string name="usb_row_bus">Bus</string>
+    <string name="usb_row_matched">Matched by</string>
+    <string name="usb_monitor">monitor</string>
+    <string name="usb_match_curated">curated</string>
+    <string name="usb_match_legacy">legacy fallback</string>
+    <string name="usb_match_unknown">not in the database</string>
+
+    <string name="usb_note_noperm_title">No USB access</string>
+    <string name="usb_note_noperm_body">Android has not let Stryker open this adapter, so it can\'t be handed to the guest. Ask again and allow it.</string>
+
+
+    <string name="usb_step_scanning">Looking at the port…</string>
+    <string name="usb_step_kernel">Checking the phone\'s kernel…</string>
+    <string name="usb_step_asking">Asking Android for access…</string>
+    <string name="usb_step_starting_guest">Starting the guest…</string>
+    <string name="usb_step_handing">Handing the adapter over…</string>
+    <string name="usb_step_waiting_driver">Waiting for the driver…</string>
+    <string name="usb_note_ask_again">Ask again</string>
+    <string name="usb_note_retry">Try again</string>
+    <string name="usb_note_handover_failed_title">Handover refused</string>
+    <string name="usb_note_handover_failed_body">%1$s would not take the adapter. See the log for what it said.</string>
+
+    <string name="usb_note_gone_title">Adapter is gone</string>
+
+    <string name="usb_note_flow_failed_title">Check failed</string>
+
+</resources>

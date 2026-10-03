@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <declare-styleable name="LightfallView">
+        <attr name="lf_color1" format="color" />
+        <attr name="lf_color2" format="color" />
+        <attr name="lf_color3" format="color" />
+        <attr name="lf_backgroundGlowColor" format="color" />
+        <attr name="lf_inkColor" format="color" />
+
+        <attr name="lf_speed" format="float" />
+        <attr name="lf_streakCount" format="integer" />
+        <attr name="lf_streakWidth" format="float" />
+        <attr name="lf_streakLength" format="float" />
+        <attr name="lf_glow" format="float" />
+        <attr name="lf_density" format="float" />
+        <attr name="lf_twinkle" format="float" />
+        <attr name="lf_zoom" format="float" />
+        <attr name="lf_backgroundGlow" format="float" />
+        <attr name="lf_opacity" format="float" />
+        <attr name="lf_backgroundAlpha" format="float" />
+
+        <attr name="lf_traceSteps" format="integer" />
+        <attr name="lf_maxScale" format="float" />
+        <attr name="lf_targetFps" format="integer" />
+    </declare-styleable>
+
+    <declare-styleable name="FloatingLinesView">
+        <attr name="fl_color1" format="color" />
+        <attr name="fl_color2" format="color" />
+        <attr name="fl_color3" format="color" />
+        <attr name="fl_inkColor" format="color" />
+
+        <attr name="fl_lineCount" format="integer" />
+        <attr name="fl_lineDistance" format="float" />
+        <attr name="fl_enableTop" format="boolean" />
+        <attr name="fl_enableMiddle" format="boolean" />
+        <attr name="fl_enableBottom" format="boolean" />
+
+        <attr name="fl_animationSpeed" format="float" />
+        <attr name="fl_haze" format="float" />
+        <attr name="fl_opacity" format="float" />
+
+        <attr name="fl_maxScale" format="float" />
+        <attr name="fl_targetFps" format="integer" />
+    </declare-styleable>
+
+</resources>

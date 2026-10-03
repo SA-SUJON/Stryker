@@ -41,7 +41,7 @@ public final class GuestAssist {
                 cached = false;
                 return false;
             }
-            RootlessEngine engine = core.rootless();
+            com.zalexdev.stryker.engine.GuestEngine engine = core.guest();
             if (engine == null || !engine.isReady()) {
                 cached = false;
                 return false;

@@ -12,7 +12,6 @@ import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
-import android.util.Log;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
@@ -47,6 +46,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import com.stryker.terminal.bridge.StrykerLog;
 
 public class NucleiScanService extends Service {
 
@@ -137,7 +137,7 @@ public class NucleiScanService extends Service {
         queued.remove(siteId);
         Site site = loadSite(siteId);
         if (site == null) {
-            Log.w("NucleiScanService", "Site " + siteId + " gone from prefs — skipping");
+            StrykerLog.w("NucleiScanService", "Site " + siteId + " gone from prefs — skipping");
             stopIfIdle();
             return;
         }
@@ -156,7 +156,7 @@ public class NucleiScanService extends Service {
             if (core.isRootless()) {
                 String script = TextUtils.join("\n",
                         buildNucleiScript(site.getUrl(), severities.get(siteId)));
-                guestSession = core.rootless().openStream(script);
+                guestSession = core.guest().openStream(script);
                 guestSessions.put(siteId, guestSession);
                 site.pid = "guest";
                 persist(site, siteId);
@@ -248,7 +248,7 @@ public class NucleiScanService extends Service {
             broadcast(siteId);
             }
         } catch (IOException | InterruptedException e) {
-            Log.e("NucleiScanService", "Scan crashed", e);
+            StrykerLog.e("NucleiScanService", "Scan crashed", e);
             Site failed = loadSite(siteId);
             if (failed != null) {
                 failed.status = "Failed";
@@ -289,7 +289,7 @@ public class NucleiScanService extends Service {
             logWriters.put(siteId, pw);
             broadcast(siteId);
         } catch (IOException e) {
-            Log.w("NucleiScanService", "Could not open log for " + siteId + ": " + e.getMessage());
+            StrykerLog.w("NucleiScanService", "Could not open log for " + siteId + ": " + e.getMessage());
         }
     }
 
@@ -321,8 +321,7 @@ public class NucleiScanService extends Service {
         lines.add("mkdir -p /tmp /root/.config/nuclei");
         lines.add("if [ ! -f " + com.zalexdev.stryker.install.InstallService.NUCLEI_TEMPLATES_MARKER + " ]; then "
                 + "echo " + TEMPLATES_MARKER + "; "
-                + "if /usr/bin/nuclei -duc -ut >/tmp/nuclei-ut.log 2>&1; then touch "
-                + com.zalexdev.stryker.install.InstallService.NUCLEI_TEMPLATES_MARKER + "; fi; "
+                + com.zalexdev.stryker.install.InstallService.NUCLEI_FETCH_TEMPLATES + "; "
                 + "tail -5 /tmp/nuclei-ut.log; rm -f /tmp/nuclei-ut.log; fi");
         StringBuilder cmd = new StringBuilder("/usr/bin/nuclei ");
         cmd.append("-u ").append(shellEscape(target)).append(' ');
@@ -347,11 +346,11 @@ public class NucleiScanService extends Service {
                 if (line.startsWith("{")) {
                     parseStatsLine(line, siteId);
                 } else if (!line.isEmpty()) {
-                    Log.d("NucleiScanService", "[" + siteId + "] " + line);
+                    StrykerLog.d("NucleiScanService", "[" + siteId + "] " + line);
                 }
             }
         } catch (IOException e) {
-            Log.d("NucleiScanService", "stderr drained: " + e.getMessage());
+            StrykerLog.d("NucleiScanService", "stderr drained: " + e.getMessage());
         }
     }
 
@@ -439,6 +438,11 @@ public class NucleiScanService extends Service {
         } else {
             startForeground(FOREGROUND_NOTIFICATION_ID, n);
         }
+    }
+
+    @Override
+    public void onTimeout(int startId, int fgsType) {
+        stopSelf();
     }
 
     private void updateForegroundNotification(Site site) {

@@ -12,8 +12,13 @@ public final class RootlessPaths {
         return new File(c.getFilesDir(), "rootless");
     }
 
-    public static File qemuBin(Context c)   { return new File(base(c), "qemu-system-aarch64"); }
-    public static File libslirp(Context c)  { return new File(base(c), "libslirp.so"); }
+    private static File nativeDir(Context c) {
+        return new File(c.getApplicationInfo().nativeLibraryDir);
+    }
+
+    public static File qemuBin(Context c)   { return new File(nativeDir(c), "libqemu.so"); }
+
+    public static File libslirp(Context c)  { return new File(nativeDir(c), "libslirp.so"); }
     public static File kernel(Context c)    { return new File(base(c), "Image"); }
     public static File initrd(Context c)    { return new File(base(c), "initrd.img"); }
     public static File rootfs(Context c)    { return new File(base(c), "rootfs.img"); }

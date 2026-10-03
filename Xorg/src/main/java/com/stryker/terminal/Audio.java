@@ -1,24 +1,3 @@
-/*
-Simple DirectMedia Layer
-Java source code (C) 2009-2014 Sergii Pylypenko
-
-This software is provided 'as-is', without any express or implied
-warranty.  In no event will the authors be held liable for any damages
-arising from the use of this software.
-
-Permission is granted to anyone to use this software for any purpose,
-including commercial applications, and to alter it and redistribute it
-freely, subject to the following restrictions:
-
-1. The origin of this software must not be misrepresented; you must not
-   claim that you wrote the original software. If you use this software
-   in a product, an acknowledgment in the product documentation would be
-   appreciated but is not required. 
-2. Altered source versions must be plainly marked as such, and must not be
-   misrepresented as being the original software.
-3. This notice may not be removed or altered from any source distribution.
-*/
-
 package com.stryker.terminal;
 
 
@@ -27,10 +6,10 @@ import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.AudioTrack;
 import android.media.MediaRecorder.AudioSource;
-import android.util.Log;
 import com.stryker.terminal.xorg.NeoXorgViewClient;
 
 import java.util.concurrent.Semaphore;
+import com.stryker.terminal.bridge.StrykerLog;
 
 @SuppressWarnings("JniMissingFunction")
 class AudioThread {
@@ -139,7 +118,7 @@ class AudioThread {
       mRecordThread.start();
     }
     if (!mRecordThread.isStopped()) {
-      Log.i("SDL", "SDL: error: application already opened audio recording device");
+      StrykerLog.i("SDL", "SDL: error: application already opened audio recording device");
       return null;
     }
 
@@ -152,7 +131,7 @@ class AudioThread {
 
     int minBufDevice = AudioRecord.getMinBufferSize(rate, channelConfig, encodingConfig);
     int minBufferSize = Math.max(bufsize * 8, minBufDevice + (bufsize - (minBufDevice % bufsize)));
-    Log.i("SDL", "SDL: app opened recording device, rate " + rate + " channels " + channels + " sample size " + (encoding + 1) + " bufsize " + bufsize + " internal bufsize " + minBufferSize);
+    StrykerLog.i("SDL", "SDL: app opened recording device, rate " + rate + " channels " + channels + " sample size " + (encoding + 1) + " bufsize " + bufsize + " internal bufsize " + minBufferSize);
     if (mRecorder == null || mRecorder.getSampleRate() != rate ||
       mRecorder.getChannelCount() != channels ||
       mRecorder.getAudioFormat() != encodingConfig ||
@@ -164,23 +143,23 @@ class AudioThread {
         mRecorder = new AudioRecord(AudioSource.MIC, rate, channelConfig, encodingConfig, minBufferSize);
         mRecorderBufferSize = minBufferSize;
       } catch (IllegalArgumentException e) {
-        Log.i("SDL", "SDL: error: failed to open MIC recording device!");
+        StrykerLog.i("SDL", "SDL: error: failed to open MIC recording device!");
         try {
           mRecorder = new AudioRecord(AudioSource.VOICE_RECOGNITION, rate, channelConfig, encodingConfig, minBufferSize);
           mRecorderBufferSize = minBufferSize;
         } catch (IllegalArgumentException eee) {
-          Log.i("SDL", "SDL: error: failed to open VOICE_RECOGNITION recording device!");
+          StrykerLog.i("SDL", "SDL: error: failed to open VOICE_RECOGNITION recording device!");
           try {
             mRecorder = new AudioRecord(AudioSource.DEFAULT, rate, channelConfig, encodingConfig, minBufferSize);
             mRecorderBufferSize = minBufferSize;
           } catch (IllegalArgumentException eeee) {
-            Log.i("SDL", "SDL: error: failed to open DEFAULT recording device!");
+            StrykerLog.i("SDL", "SDL: error: failed to open DEFAULT recording device!");
             return null;
           }
         }
       }
     } else {
-      Log.i("SDL", "SDL: reusing old recording device");
+      StrykerLog.i("SDL", "SDL: reusing old recording device");
     }
     mRecordThread.startRecording();
     return mRecordThread.mRecordBuffer;
@@ -188,11 +167,11 @@ class AudioThread {
 
   private void stopRecording() {
     if (mRecordThread == null || mRecordThread.isStopped()) {
-      Log.i("SDL", "SDL: error: application already closed audio recording device");
+      StrykerLog.i("SDL", "SDL: error: application already closed audio recording device");
       return;
     }
     mRecordThread.stopRecording();
-    Log.i("SDL", "SDL: app closed recording device");
+    StrykerLog.i("SDL", "SDL: app closed recording device");
   }
 
   private class RecordingThread extends Thread {

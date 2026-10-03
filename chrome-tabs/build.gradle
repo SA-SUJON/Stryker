@@ -2,11 +2,11 @@ apply plugin: 'com.android.library'
 
 android {
   namespace 'de.mrapp.android.tabswitcher'
-  compileSdk 33
+  compileSdk 36
 
   defaultConfig {
     minSdk 24
-    targetSdk 28
+    targetSdk 36
   }
 
   lint {

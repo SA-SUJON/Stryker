@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="about_thanks_label">致谢</string>
+    <string name="about_thanks_desc">让 Stryker 走到今天的人</string>
+
+    <string name="thanks_title">谢谢</string>
+    <string name="thanks_subtitle">Stryker 靠着他人的时间、测试和补丁才有今天。</string>
+    <string name="thanks_section">特别鸣谢</string>
+    <string name="thanks_community">……以及 Stryker 社区</string>
+    <string name="thanks_close">关闭</string>
+
+    <string name="thanks_line">特别鸣谢：%1$s 以及 Stryker 社区</string>
+
+</resources>

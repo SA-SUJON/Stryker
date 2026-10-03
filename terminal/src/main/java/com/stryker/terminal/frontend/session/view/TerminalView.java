@@ -15,7 +15,6 @@ import android.text.Editable;
 import android.text.InputType;
 import android.text.TextUtils;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.view.*;
 import android.view.accessibility.AccessibilityManager;
 import android.view.inputmethod.BaseInputConnection;
@@ -33,6 +32,7 @@ import com.stryker.terminal.component.completion.OnAutoCompleteListener;
 import com.stryker.terminal.frontend.session.terminal.OnTextSize;
 
 import com.stryker.terminal.R;
+import com.stryker.terminal.bridge.StrykerLog;
 
 public final class TerminalView extends View {
 
@@ -282,7 +282,7 @@ public final class TerminalView extends View {
     return new BaseInputConnection(this, true) {
       @Override
       public boolean finishComposingText() {
-        if (LOG_KEY_EVENTS) Log.i(EmulatorDebug.LOG_TAG, "IME: finishComposingText()");
+        if (LOG_KEY_EVENTS) StrykerLog.i(EmulatorDebug.LOG_TAG, "IME: finishComposingText()");
         super.finishComposingText();
 
         sendTextToTerminal(getEditable());
@@ -293,7 +293,7 @@ public final class TerminalView extends View {
       @Override
       public boolean commitText(CharSequence text, int newCursorPosition) {
         if (LOG_KEY_EVENTS) {
-          Log.i(EmulatorDebug.LOG_TAG, "IME: commitText(\"" + text + "\", " + newCursorPosition + ")");
+          StrykerLog.i(EmulatorDebug.LOG_TAG, "IME: commitText(\"" + text + "\", " + newCursorPosition + ")");
         }
         super.commitText(text, newCursorPosition);
 
@@ -311,7 +311,7 @@ public final class TerminalView extends View {
       @Override
       public boolean deleteSurroundingText(int leftLength, int rightLength) {
         if (LOG_KEY_EVENTS) {
-          Log.i(EmulatorDebug.LOG_TAG, "IME: deleteSurroundingText(" + leftLength + ", " + rightLength + ")");
+          StrykerLog.i(EmulatorDebug.LOG_TAG, "IME: deleteSurroundingText(" + leftLength + ", " + rightLength + ")");
         }
         KeyEvent deleteKey = new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL);
         for (int i = 0; i < leftLength; i++) sendKeyEvent(deleteKey);
@@ -596,7 +596,7 @@ public final class TerminalView extends View {
   @Override
   public boolean onKeyPreIme(int keyCode, KeyEvent event) {
     if (LOG_KEY_EVENTS)
-      Log.i(EmulatorDebug.LOG_TAG, "onKeyPreIme(keyCode=" + keyCode + ", event=" + event + ")");
+      StrykerLog.i(EmulatorDebug.LOG_TAG, "onKeyPreIme(keyCode=" + keyCode + ", event=" + event + ")");
     if (keyCode == KeyEvent.KEYCODE_BACK) {
       if (mIsSelectingText) {
         toggleSelectingText(null);
@@ -616,7 +616,7 @@ public final class TerminalView extends View {
   @Override
   public boolean onKeyDown(int keyCode, KeyEvent event) {
     if (LOG_KEY_EVENTS)
-      Log.i(EmulatorDebug.LOG_TAG, "onKeyDown(keyCode=" + keyCode + ", isSystem()=" + event.isSystem() + ", event=" + event + ")");
+      StrykerLog.i(EmulatorDebug.LOG_TAG, "onKeyDown(keyCode=" + keyCode + ", isSystem()=" + event.isSystem() + ", event=" + event + ")");
     if (mEmulator == null) return true;
 
     if (mClient.onKeyDown(keyCode, event, mTermSession)) {
@@ -641,7 +641,7 @@ public final class TerminalView extends View {
     if (shiftDown) keyMod |= KeyHandler.KEYMOD_SHIFT;
     if (event.isNumLockOn()) keyMod |= KeyHandler.KEYMOD_NUM_LOCK;
     if (!event.isFunctionPressed() && handleKeyCode(keyCode, keyMod)) {
-      if (LOG_KEY_EVENTS) Log.i(EmulatorDebug.LOG_TAG, "handleKeyCode() took key event");
+      if (LOG_KEY_EVENTS) StrykerLog.i(EmulatorDebug.LOG_TAG, "handleKeyCode() took key event");
       return true;
     }
 
@@ -654,7 +654,7 @@ public final class TerminalView extends View {
 
     int result = event.getUnicodeChar(effectiveMetaState);
     if (LOG_KEY_EVENTS)
-      Log.i(EmulatorDebug.LOG_TAG, "KeyEvent#getUnicodeChar(" + effectiveMetaState + ") returned: " + result);
+      StrykerLog.i(EmulatorDebug.LOG_TAG, "KeyEvent#getUnicodeChar(" + effectiveMetaState + ") returned: " + result);
     if (result == 0) {
       return false;
     }
@@ -689,7 +689,7 @@ public final class TerminalView extends View {
 
   public void inputCodePoint(int eventSource, int codePoint, boolean controlDownFromEvent, boolean leftAltDownFromEvent) {
     if (LOG_KEY_EVENTS) {
-      Log.i(EmulatorDebug.LOG_TAG, "inputCodePoint(codePoint=" + codePoint + ", controlDownFromEvent=" + controlDownFromEvent + ", leftAltDownFromEvent="
+      StrykerLog.i(EmulatorDebug.LOG_TAG, "inputCodePoint(codePoint=" + codePoint + ", controlDownFromEvent=" + controlDownFromEvent + ", leftAltDownFromEvent="
         + leftAltDownFromEvent + ")");
     }
 
@@ -757,7 +757,7 @@ public final class TerminalView extends View {
   @Override
   public boolean onKeyUp(int keyCode, KeyEvent event) {
     if (LOG_KEY_EVENTS)
-      Log.i(EmulatorDebug.LOG_TAG, "onKeyUp(keyCode=" + keyCode + ", event=" + event + ")");
+      StrykerLog.i(EmulatorDebug.LOG_TAG, "onKeyUp(keyCode=" + keyCode + ", event=" + event + ")");
     if (mEmulator == null) return true;
 
     if (mClient.onKeyUp(keyCode, event)) {

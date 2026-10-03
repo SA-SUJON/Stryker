@@ -11,6 +11,7 @@ public final class UsbDeviceReport {
     public final String manufacturer;
     public final String product;
     public final String speedMbps;
+    public final String busPath;
     public final UsbProbe.InterfaceProbe interfaces;
     public final ChipsetInfo chipset;
     public final ChipsetSource chipsetSource;
@@ -21,7 +22,7 @@ public final class UsbDeviceReport {
 
     public UsbDeviceReport(String vidPid, String port, String sysPath,
                            String manufacturer, String product, String speedMbps,
-                           UsbProbe.InterfaceProbe interfaces,
+                           String busPath, UsbProbe.InterfaceProbe interfaces,
                            ChipsetInfo chipset, ChipsetSource chipsetSource) {
         this.vidPid = vidPid;
         this.port = port;
@@ -29,6 +30,7 @@ public final class UsbDeviceReport {
         this.manufacturer = manufacturer;
         this.product = product;
         this.speedMbps = speedMbps;
+        this.busPath = busPath;
         this.interfaces = interfaces;
         this.chipset = chipset;
         this.chipsetSource = chipsetSource;

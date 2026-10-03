@@ -2,7 +2,6 @@ package com.zalexdev.stryker.engine;
 
 import android.content.Context;
 import android.hardware.usb.UsbDevice;
-import android.util.Log;
 
 import com.zalexdev.stryker.netdetect.ChipsetDb;
 import com.zalexdev.stryker.netdetect.ChipsetInfo;
@@ -17,11 +16,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import com.stryker.terminal.bridge.StrykerLog;
 
-public final class RootlessEngine {
+public final class RootlessEngine implements GuestEngine {
 
     private static final String TAG = "RootlessEngine";
     private static final int BOOT_TIMEOUT_MS = 150_000;
+
+    private static final int BOOT_PING_TIMEOUT_MS = 15_000;
     private static final String PROMPT_MARK = "__STRYKER_ID__";
 
     private static volatile RootlessEngine instance;
@@ -52,13 +54,8 @@ public final class RootlessEngine {
     private static final String NETDEV_ID = "net0";
     private volatile UsbPassthroughManager usb;
 
-    public interface BootListener {
-        void onBootLine(String line);
-        void onBooted();
-        void onFailed(String reason);
+    public interface BootListener extends GuestEngine.BootListener {
     }
-
-    public enum State { STOPPED, BOOTING, READY }
 
     private RootlessEngine(Context context) {
         this.app = context.getApplicationContext();
@@ -73,12 +70,67 @@ public final class RootlessEngine {
         return instance;
     }
 
+    @Override
+    public EngineType type() {
+        return EngineType.ROOTLESS;
+    }
+
+    @Override
+    public String displayName() {
+        return "Rootless VM (QEMU)";
+    }
+
+    @Override
+    public java.util.List<Artifact> requiredArtifacts() {
+        java.util.List<Artifact> out = new java.util.ArrayList<>();
+        out.add(new Artifact("bundled", "QEMU (ships in the app)", RootlessPaths.qemuBin(app), false));
+        out.add(new Artifact("bundled", "libslirp (ships in the app)", RootlessPaths.libslirp(app), false));
+        out.add(new Artifact("kernel", "Kernel", RootlessPaths.kernel(app), false));
+        out.add(new Artifact("initrd", "Initrd", RootlessPaths.initrd(app), false));
+        out.add(new Artifact("rootfs", "Debian image", RootlessPaths.rootfs(app), true));
+        return out;
+    }
+
+    @Override
+    public java.util.List<String> missing() {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (Artifact a : requiredArtifacts()) {
+            if (!a.target.exists() || a.target.length() == 0) out.add(a.label);
+        }
+        return out;
+    }
+
+    @Override
+    public File shareDir() {
+        return resolveShareDir();
+    }
+
+    @Override
+    public int sshPort() {
+        return RootlessPaths.HOST_SSH_PORT;
+    }
+
+    @Override
+    public boolean supports(Capability capability) {
+        switch (capability) {
+            case DISK_TUNING:
+            case TCG_TUNING:
+            case CPU_MODEL:
+            case SAFE_PROFILE:
+            case DISK_RESIZE:
+            case USB_PASSTHROUGH:
+                return true;
+            case SECCOMP:
+            default:
+                return false;
+        }
+    }
 
     public boolean isInstalled() {
-        return RootlessPaths.qemuBin(app).exists()
+        return RootlessPaths.qemuBin(app).canExecute()
+                && RootlessPaths.libslirp(app).exists()
                 && RootlessPaths.kernel(app).exists()
                 && RootlessPaths.initrd(app).exists()
-                && RootlessPaths.libslirp(app).exists()
                 && RootlessPaths.rootfs(app).exists();
     }
 
@@ -95,8 +147,17 @@ public final class RootlessEngine {
     }
 
 
-    public synchronized boolean startBlocking(BootListener listener) {
+    public synchronized boolean startBlocking(GuestEngine.BootListener listener) {
         if (isReady()) { if (listener != null) listener.onBooted(); return true; }
+        if (EngineType.active(new Core(app)) != EngineType.ROOTLESS) {
+            GuestEngine up = Engines.running(app);
+            if (up != null && up != this) {
+                lastError = "another guest (" + up.displayName() + ") is already running";
+                GuestExec.logToStore(lastError + " — not starting the VM on top of it");
+                if (listener != null) listener.onFailed(lastError);
+                return false;
+            }
+        }
         if (isRunning() && booted) {
             for (int i = 0; i < 5; i++) {
                 if (GuestExec.ping(2000)) {
@@ -125,7 +186,7 @@ public final class RootlessEngine {
             lastError = reason;
             note(listener, "Boot failed (" + reason + ") — retrying with a safe profile");
             GuestExec.logToStore("VM boot failed (" + reason + "), falling back to the safe profile "
-                    + "(aio=threads, cache=writeback, no 9p share, no virtio-rng, no USB HC)");
+                    + "(aio=threads, cache=writeback, legacy CPU, no virtio-rng, no fast boot)");
             VmSpecs.setSafeBoot(prefs, true);
             lastBootUsedFallback = true;
             killAndAwait(12_000);
@@ -133,8 +194,8 @@ public final class RootlessEngine {
             if (second == null) {
                 lastError = "";
                 VmSpecs.setSafeBoot(prefs, false);
-                GuestExec.logToStore("VM booted with the safe profile. The 9p capture share is off for "
-                        + "this session — restart the VM to retry the normal profile.");
+                GuestExec.logToStore("VM booted with the safe profile — slower, but working. "
+                        + "Restart the VM to retry the normal one.");
                 return true;
             }
             VmSpecs.setSafeBoot(prefs, false);
@@ -149,7 +210,7 @@ public final class RootlessEngine {
         return false;
     }
 
-    private String attemptBoot(BootListener listener) {
+    private String attemptBoot(GuestEngine.BootListener listener) {
         try {
             killAndAwait(12_000);
             clearStaleSockets();
@@ -157,12 +218,14 @@ public final class RootlessEngine {
             autoGrowDisk();
             VmProbe.ensureCpuProfileVerified(app, prefs());
             List<String> cmd = buildCommand();
-            Log.i(TAG, "QEMU: " + join(cmd));
+            StrykerLog.i(TAG, "QEMU: " + join(cmd));
 
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.directory(RootlessPaths.base(app));
             pb.environment().put("LD_LIBRARY_PATH",
-                    RootlessPaths.base(app).getAbsolutePath() + ":/system/lib64:/vendor/lib64");
+                    app.getApplicationInfo().nativeLibraryDir
+                            + ":" + RootlessPaths.base(app).getAbsolutePath()
+                            + ":/system/lib64:/vendor/lib64");
             pb.redirectErrorStream(true);
 
             final Process proc = pb.start();
@@ -176,28 +239,33 @@ public final class RootlessEngine {
             while (System.currentTimeMillis() < deadline) {
                 if (stopRequested) return "stopped";
                 if (!isAlive(proc)) {
-                    return "QEMU exited during boot (code " + safeExit(proc) + "): " + lastLogProblem();
+                    return describeExit(proc);
                 }
-                if (GuestExec.ping(1500) && guestShellReady()) {
+                if (GuestExec.ping(BOOT_PING_TIMEOUT_MS) && guestShellReady()) {
                     markBooted();
                     if (listener != null) listener.onBooted();
                     return null;
                 }
-                // The guest can be fully up with no agent listening — Debian boots, the console
-                // sits at a root prompt, and port 1050 stays silent because nothing serves it.
-                // Waiting longer never fixes that, so once the console shows the guest is alive,
-                // bootstrap the agent through it instead of running out the clock.
                 if (!consoleTried && VmBootStage.detect(tailLog(120)) >= VmBootStage.AGENT) {
                     consoleTried = true;
                     note(listener, "Guest is up but the agent is not answering — starting it");
-                    bootstrapAgentOverConsole();
+                    new Thread(this::bootstrapAgentOverConsole, "stryker-agent-bootstrap").start();
                 }
                 sleep(1000);
             }
-            return "Boot timed out after " + (BOOT_TIMEOUT_MS / 1000) + "s"
-                    + (consoleTried ? " — the guest booted but stryker-agentd never came up" : "");
+            java.util.List<String> tail = tailLog(200);
+            int stage = VmBootStage.detect(tail);
+            return "Boot timed out after " + (BOOT_TIMEOUT_MS / 1000) + "s — "
+                    + BootDiagnosis.reason(tail, stage);
+        } catch (java.io.IOException e) {
+            StrykerLog.e(TAG, "start failed", e);
+            String msg = e.getMessage() == null ? "" : e.getMessage();
+            return msg.startsWith("Android will not") || msg.contains("is not on disk")
+                    || msg.contains("is empty")
+                    ? msg
+                    : NativeExec.explain(RootlessPaths.qemuBin(app), e);
         } catch (Exception e) {
-            Log.e(TAG, "start failed", e);
+            StrykerLog.e(TAG, "start failed", e);
             return e.getMessage() == null ? e.toString() : e.getMessage();
         }
     }
@@ -206,11 +274,13 @@ public final class RootlessEngine {
         return lastError == null ? "" : lastError;
     }
 
+    @Override
     public String guestPrompt() {
         return guestPrompt == null ? "" : guestPrompt;
     }
 
     private boolean guestShellReady() {
+        String saw = null;
         try {
             ArrayList<String> out = GuestExec.run(
                     "printf '" + PROMPT_MARK + "%s@%s\\n' \"$(id -un 2>/dev/null)\" \"$(hostname 2>/dev/null)\"");
@@ -218,16 +288,24 @@ public final class RootlessEngine {
                 if (l == null) continue;
                 int at = l.indexOf(PROMPT_MARK);
                 if (at < 0) continue;
-                String id = l.substring(at + PROMPT_MARK.length()).trim();
-                if (id.length() > 5 && id.startsWith("root@")) {
-                    guestPrompt = id;
+                saw = l.substring(at + PROMPT_MARK.length()).trim();
+                if (saw.startsWith("root@")) {
+                    guestPrompt = saw;
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            saw = t.getClass().getSimpleName();
+        }
+        if (!java.util.Objects.equals(saw, lastReadinessMiss)) {
+            lastReadinessMiss = saw;
+            StrykerLog.w(TAG, "guest answers but does not look like root yet: "
+                    + (saw == null ? "no marker in the reply" : "\"" + saw + "\""));
         }
         return false;
     }
+
+    private String lastReadinessMiss;
 
     public boolean usedSafeFallback() {
         return lastBootUsedFallback;
@@ -245,7 +323,7 @@ public final class RootlessEngine {
         }
     }
 
-    private void note(BootListener listener, String message) {
+    private void note(GuestEngine.BootListener listener, String message) {
         if (listener != null) listener.onBootLine(message);
     }
 
@@ -265,7 +343,7 @@ public final class RootlessEngine {
             GuestExec.logToStore("VM disk grew " + (before / VmSpecs.GB) + " GB -> "
                     + (target / VmSpecs.GB) + " GB to match free storage");
         } catch (Throwable t) {
-            Log.w(TAG, "autoGrowDisk: " + t.getMessage());
+            StrykerLog.w(TAG, "autoGrowDisk: " + t.getMessage());
         }
     }
 
@@ -273,7 +351,7 @@ public final class RootlessEngine {
         try {
             GuestExec.run("command -v fstrim >/dev/null 2>&1 && fstrim / 2>&1 || true");
         } catch (Throwable t) {
-            Log.w(TAG, "fstrim: " + t.getMessage());
+            StrykerLog.w(TAG, "fstrim: " + t.getMessage());
         }
     }
 
@@ -285,7 +363,7 @@ public final class RootlessEngine {
 
     private static void deleteQuietly(File f) {
         try {
-            if (f != null && f.exists()) //noinspection ResultOfMethodCallIgnored
+            if (f != null && f.exists())
                 f.delete();
         } catch (Throwable ignored) {
         }
@@ -325,13 +403,49 @@ public final class RootlessEngine {
                 String lower = l.toLowerCase(java.util.Locale.ROOT);
                 if (lower.contains("qemu-system") || lower.contains("error")
                         || lower.contains("failed") || lower.contains("not supported")
-                        || lower.contains("invalid")) {
+                        || lower.contains("invalid") || lower.contains("could not")
+                        || lower.contains("couldn't") || lower.contains("cannot")
+                        || lower.contains("denied") || lower.contains("no such")) {
                     return l.length() > 160 ? l.substring(0, 160) : l;
                 }
             }
         } catch (Throwable ignored) {
         }
-        return "see the boot log";
+        return "";
+    }
+
+    private String describeExit(Process proc) {
+        int code = safeExit(proc);
+        String how = code >= 128 && code < 160
+                ? "killed by " + signalName(code - 128)
+                : "exited with code " + code;
+
+        String problem = lastLogProblem();
+        java.util.List<String> tail = tailLog(12);
+        if (problem.isEmpty()) {
+            problem = tail.isEmpty()
+                    ? "QEMU wrote nothing before dying — it did not get as far as starting the machine"
+                    : "the boot log ends at: " + tail.get(tail.size() - 1);
+        }
+
+        if (!tail.isEmpty()) {
+            StringBuilder sb = new StringBuilder("QEMU " + how + ". Last lines of the boot log:");
+            for (String l : tail) sb.append(System.lineSeparator()).append("  ").append(l);
+            GuestExec.logToStore(sb.toString());
+        }
+        return "QEMU " + how + ": " + problem;
+    }
+
+    private static String signalName(int sig) {
+        switch (sig) {
+            case 4:  return "SIGILL (the CPU refused an instruction QEMU emitted)";
+            case 6:  return "SIGABRT (QEMU aborted itself)";
+            case 7:  return "SIGBUS";
+            case 9:  return "SIGKILL (Android killed it — usually out of memory)";
+            case 11: return "SIGSEGV (crash)";
+            case 15: return "SIGTERM";
+            default: return "signal " + sig;
+        }
     }
 
     public void startAsync() {
@@ -343,16 +457,6 @@ public final class RootlessEngine {
         teardownRunning();
     }
 
-    /**
-     * Tears down whatever VM is currently running, without claiming the user asked to stop.
-     *
-     * stopRequested is the "abandon the boot we are waiting on" signal that attemptBoot() polls.
-     * Clearing out a previous instance before starting a new one must not set it: doing so marks
-     * the boot that has not even launched yet as stopped, and attemptBoot() bails on its first
-     * loop with reason "stopped". Because each aborted attempt still leaves its own QEMU alive,
-     * the next start() finds a live process, tears it down, sets the flag again, and the engine
-     * never gets past this point.
-     */
     private void teardownRunning() {
         booted = false;
         guestPrompt = "";
@@ -383,7 +487,7 @@ public final class RootlessEngine {
         return p == null || !isAlive(p);
     }
 
-    public boolean hardRestart(BootListener listener) {
+    public boolean hardRestart(GuestEngine.BootListener listener) {
         stopAndWait(20_000);
         return startBlocking(listener);
     }
@@ -404,11 +508,11 @@ public final class RootlessEngine {
             raf.setLength(targetBytes);
             raf.getFD().sync();
         } catch (Exception e) {
-            Log.e(TAG, "resizeDisk failed", e);
+            StrykerLog.e(TAG, "resizeDisk failed", e);
             return ResizeResult.IO_ERROR;
         }
         if (img.length() != targetBytes) {
-            Log.e(TAG, "resizeDisk: image is " + img.length() + " after asking for " + targetBytes);
+            StrykerLog.e(TAG, "resizeDisk: image is " + img.length() + " after asking for " + targetBytes);
             return ResizeResult.IO_ERROR;
         }
         try {
@@ -476,7 +580,7 @@ public final class RootlessEngine {
             GuestExec.logToStore("resize2fs did not expand the filesystem"
                     + (done ? "" : " (command did not finish)") + " — retrying on the next boot");
         } catch (Throwable t) {
-            Log.w(TAG, "maybeResizeFilesystem: " + t.getMessage());
+            StrykerLog.w(TAG, "maybeResizeFilesystem: " + t.getMessage());
         }
     }
 
@@ -537,7 +641,6 @@ public final class RootlessEngine {
                     + "if [ -d /tmp/stryker-ird/lib/modules ]; then mkdir -p /lib/modules; "
                     + "cp -a /tmp/stryker-ird/lib/modules/. /lib/modules/; depmod -a >/dev/null 2>&1; "
                     + "echo __MODULES_DEPLOYED__; fi; rm -rf /tmp/stryker-ird");
-            //noinspection ResultOfMethodCallIgnored
             staged.delete();
             ArrayList<String> res = GuestExec.run(
                     "modprobe loop >/dev/null 2>&1; modprobe squashfs >/dev/null 2>&1; "
@@ -550,7 +653,7 @@ public final class RootlessEngine {
             }
             GuestExec.logToStore("loop still unavailable after loading modules");
         } catch (Throwable t) {
-            Log.w(TAG, "ensureKernelModules: " + t.getMessage());
+            StrykerLog.w(TAG, "ensureKernelModules: " + t.getMessage());
         }
     }
 
@@ -580,6 +683,7 @@ public final class RootlessEngine {
     }
 
 
+    @Override
     public ArrayList<String> exec(String command) {
         if (!isReady() && !startBlocking(null)) {
             GuestExec.logToStore("VM is not running — start it from the dashboard, then retry");
@@ -588,6 +692,7 @@ public final class RootlessEngine {
         return GuestExec.run(command);
     }
 
+    @Override
     public GuestExec.Session openStream(String command) throws java.io.IOException {
         if (!isReady()) startBlocking(null);
         return GuestExec.openJob(command);
@@ -596,11 +701,16 @@ public final class RootlessEngine {
 
     private static final String CORE_MARKER = "/CORE/PixieWps/pixie.py";
     private static final String CORE_ASSET = "rootless/stryker-guest-core.tar";
-    /** Name the payload carries inside the 9p share, i.e. /sdcard/Stryker/<this> in the guest. */
     private static final String STAGED_CORE = ".stryker-guest-core.tar";
 
+    private GuestEngine guestInUse() {
+        GuestEngine up = Engines.running(app);
+        return up != null ? up : Engines.active(new Core(app));
+    }
+
     public synchronized boolean ensureGuestCore() {
-        if (!isReady() && !startBlocking(null)) return false;
+        GuestEngine active = guestInUse();
+        if (!active.isReady() && !active.startBlocking(null)) return false;
         ArrayList<String> chk = GuestExec.run("[ -f " + CORE_MARKER + " ] && "
                 + "cat " + GuestCore.VERSION_FILE + " 2>/dev/null || echo __NO__");
         for (String l : chk) {
@@ -609,16 +719,6 @@ public final class RootlessEngine {
         return deployGuestCore();
     }
 
-    /**
-     * Shell that unpacks the staged payload and reports whether the AGENT specifically survived.
-     *
-     * The witness matters. Checking only {@link #CORE_MARKER} — a file from the /CORE part of the
-     * archive — lets a deploy that produced a zero-byte /usr/local/sbin/stryker-agentd report
-     * success. systemd then fails that unit with 203/EXEC forever, and because every repair path
-     * runs through the agent, the VM never recovers: this is how an app update leaves a working
-     * guest permanently stuck at "waiting for the guest agent". Test the file the guest actually
-     * has to execute, and test it for content (-s), not just presence.
-     */
     private static String unpackAndVerify(String tarPath) {
         return "tar xf " + tarPath + " -C / 2>&1; "
                 + "chmod 0755 /usr/local/sbin/stryker-ptyd /usr/local/sbin/stryker-agentd 2>/dev/null; "
@@ -627,7 +727,6 @@ public final class RootlessEngine {
                 + "&& [ -f " + CORE_MARKER + " ]; then echo __DEPLOYED__; else echo __FAIL__; fi";
     }
 
-    /** Copies the payload into the share and makes sure it is on disk before the guest reads it. */
     private java.io.File stageGuestCore(java.io.File shareDir) throws java.io.IOException {
         java.io.File staged = new java.io.File(shareDir, STAGED_CORE);
         try (java.io.InputStream in = app.getAssets().open(CORE_ASSET);
@@ -636,10 +735,6 @@ public final class RootlessEngine {
             int r;
             while ((r = in.read(buf)) != -1) out.write(buf, 0, r);
             out.flush();
-            // flush() only empties the Java buffer. The guest reads this file through 9p, so it
-            // has to be on disk before tar runs there — otherwise tar sees a short archive and
-            // creates the entries it never got the contents for, which is exactly the zero-byte
-            // agent that breaks the VM for good.
             out.getFD().sync();
         }
         return staged;
@@ -647,64 +742,46 @@ public final class RootlessEngine {
 
     public boolean deployGuestCore() {
         try {
-            java.io.File shareDir = resolveShareDir();
+            GuestEngine active = guestInUse();
+            java.io.File shareDir = active.shareDir();
             if (shareDir == null) return false;
             java.io.File staged = stageGuestCore(shareDir);
             ArrayList<String> res = GuestExec.run(
-                    unpackAndVerify("/sdcard/Stryker/" + STAGED_CORE));
+                    unpackAndVerify(active.guestSharePath() + "/" + STAGED_CORE));
             for (String l : res) {
                 if (l != null && l.trim().startsWith("__AGENT_BYTES__")) {
                     GuestExec.logToStore("guest core deployed, agent is "
                             + l.trim().substring("__AGENT_BYTES__".length()) + " bytes");
                 }
             }
-            //noinspection ResultOfMethodCallIgnored
             staged.delete();
             boolean ok = false;
             for (String l : res) if (l != null && l.trim().equals("__DEPLOYED__")) ok = true;
             if (ok) restartGuestAgent();
             return ok;
         } catch (Exception e) {
-            Log.w(TAG, "deployGuestCore failed: " + e.getMessage());
+            StrykerLog.w(TAG, "deployGuestCore failed: " + e.getMessage());
             return false;
         }
     }
 
-
-    /**
-     * Brings the agent up over the serial console, for when it is not up to be talked to.
-     *
-     * Everything the app does inside the guest goes through stryker-agentd on port 1050 —
-     * including deployGuestCore(), which installs the agent. That circularity means a guest
-     * whose agent never started cannot be fixed through the normal path: the VM boots, the
-     * console shows a root prompt, and the app waits for an agent that nothing is going to
-     * start. The console is already there and already root, so use it.
-     *
-     * Handles every way the agent ends up unusable: never unpacked, unpacked as a zero-byte file
-     * by a deploy that was verified against the wrong witness (see unpackAndVerify), socat absent
-     * so it exits on startup, or simply not running.
-     */
     public boolean bootstrapAgentOverConsole() {
         String sock = RootlessPaths.serialSock(app).getAbsolutePath();
         if (!new File(sock).exists()) return false;
 
         GuestExec.logToStore("guest agent unreachable — bootstrapping it over the serial console");
-        // deployGuestCore() removes the payload after itself, so put a fresh copy in the share
-        // before asking the console to unpack it.
         File staged = null;
         if (shareActive && shareInUse != null) {
             try {
                 staged = stageGuestCore(shareInUse);
             } catch (Exception e) {
-                Log.w(TAG, "staging guest core for console bootstrap failed: " + e.getMessage());
+                StrykerLog.w(TAG, "staging guest core for console bootstrap failed: " + e.getMessage());
                 staged = null;
             }
         }
 
         StringBuilder cmd = new StringBuilder();
         if (staged != null) {
-            // Re-extract unconditionally: the file on disk may exist, be executable, and still be
-            // empty, which is the state that produces 203/EXEC.
             cmd.append(unpackAndVerify("/sdcard/Stryker/" + STAGED_CORE)).append("; ");
         }
         cmd.append("command -v socat >/dev/null 2>&1 || (export DEBIAN_FRONTEND=noninteractive; ")
@@ -719,14 +796,12 @@ public final class RootlessEngine {
             if (l != null && l.contains("__AGENT_UP__")) up = true;
         }
         if (staged != null) {
-            //noinspection ResultOfMethodCallIgnored
             staged.delete();
         }
         if (up) {
             GuestExec.logToStore("guest agent started from the console");
             return true;
         }
-        // Nothing to lose by naming what is missing: the same console can tell us.
         for (String l : GuestConsole.run(
                 "printf 'agentd_bytes=%s socat=%s\\n' "
                 + "\"$(wc -c < /usr/local/sbin/stryker-agentd 2>/dev/null || echo missing)\" "
@@ -752,9 +827,10 @@ public final class RootlessEngine {
                 return;
             }
         }
-        Log.w(TAG, "guest agent restarted but port 1052 never came up");
+        StrykerLog.w(TAG, "guest agent restarted but port 1052 never came up");
     }
 
+    @Override
     public synchronized boolean ensureUsbWifiAttached() {
         if (!isReady() && !startBlocking(null)) return false;
         if (usb == null) return false;
@@ -775,17 +851,13 @@ public final class RootlessEngine {
         return guestWlanInterfaces();
     }
 
+    @Override
     public boolean usbDriverOk() {
         return usbDriverOk;
     }
 
     private static java.util.List<String> guestWlanInterfaces() {
-        java.util.List<String> out = new java.util.ArrayList<>();
-        for (String l : GuestExec.run(
-                "iw dev 2>/dev/null | awk '$1==\"Interface\"{print $2}'")) {
-            if (l != null && !l.trim().isEmpty()) out.add(l.trim());
-        }
-        return out;
+        return GuestExec.wirelessInterfaces();
     }
 
     private boolean awaitGuestWlan(long timeoutMs, int expected) {
@@ -837,9 +909,11 @@ public final class RootlessEngine {
         return sb.length() == 0 ? null : sb.toString();
     }
 
+    @Override
     public UsbPassthroughManager usb() { return usb; }
     public QmpClient qmp() { return qmp; }
 
+    @Override
     public boolean forwardPort(int hostPort, int guestPort) {
         QmpClient c = qmp;
         if (c == null || !c.isConnected()) return false;
@@ -848,6 +922,12 @@ public final class RootlessEngine {
                 + hostPort + "-:" + guestPort);
     }
 
+    @Override
+    public String guestSharePath() {
+        return "/sdcard/Stryker";
+    }
+
+    @Override
     public boolean unforwardPort(int hostPort) {
         QmpClient c = qmp;
         if (c == null || !c.isConnected()) return false;
@@ -855,27 +935,35 @@ public final class RootlessEngine {
     }
 
 
-    public State status() {
-        if (!isRunning()) return State.STOPPED;
-        if (!booted) return State.BOOTING;
-        return System.currentTimeMillis() - lastGuestOk < GUEST_FRESH_MS
-                ? State.READY : State.BOOTING;
+    @Override
+    public java.util.List<String> consoleTail(int lines) {
+        return tailLog(lines);
     }
 
-    public State statusBlocking() {
+    @Override
+    public GuestEngine.State status() {
+        if (!isRunning()) return GuestEngine.State.STOPPED;
+        if (!booted) return GuestEngine.State.BOOTING;
+        boolean fresh = System.currentTimeMillis() - lastGuestOk < GUEST_FRESH_MS;
+        return fresh && lastGuestOk >= GuestSsh.lastLossAt()
+                ? GuestEngine.State.READY : GuestEngine.State.BOOTING;
+    }
+
+    @Override
+    public GuestEngine.State statusBlocking() {
         if (isRunning()) {
             if (GuestExec.ping(1500)) {
                 lastGuestOk = System.currentTimeMillis();
                 markBooted();
-                return State.READY;
+                return GuestEngine.State.READY;
             }
-            return State.BOOTING;
+            return GuestEngine.State.BOOTING;
         }
         if (GuestExec.ping(1500)) {
             lastGuestOk = System.currentTimeMillis();
-            return State.READY;
+            return GuestEngine.State.READY;
         }
-        return State.STOPPED;
+        return GuestEngine.State.STOPPED;
     }
 
     private void markBooted() {
@@ -891,7 +979,7 @@ public final class RootlessEngine {
                 reclaimFreedSpace();
                 ensureKernelModules();
             } catch (Throwable t) {
-                Log.w(TAG, "post-boot maintenance failed: " + t.getMessage());
+                StrykerLog.w(TAG, "post-boot maintenance failed: " + t.getMessage());
             }
         });
     }
@@ -923,10 +1011,10 @@ public final class RootlessEngine {
             if (qmp.connect()) {
                 usb = new UsbPassthroughManager(app, qmp);
             } else {
-                Log.w(TAG, "QMP connect failed — USB passthrough unavailable");
+                StrykerLog.w(TAG, "QMP connect failed — USB passthrough unavailable");
             }
         } catch (Exception e) {
-            Log.w(TAG, "control connect failed: " + e.getMessage());
+            StrykerLog.w(TAG, "control connect failed: " + e.getMessage());
         }
     }
 
@@ -988,12 +1076,6 @@ public final class RootlessEngine {
         }
 
         a.add("-netdev"); a.add("user,id=net0,ipv6=off"
-                + ",hostfwd=tcp:" + RootlessPaths.HOST_LOOPBACK + ":" + RootlessPaths.HOST_EXEC_PORT
-                + "-:" + RootlessPaths.GUEST_EXEC_PORT
-                + ",hostfwd=tcp:" + RootlessPaths.HOST_LOOPBACK + ":" + RootlessPaths.HOST_TERM_PORT
-                + "-:" + RootlessPaths.GUEST_TERM_PORT
-                + ",hostfwd=tcp:" + RootlessPaths.HOST_LOOPBACK + ":" + RootlessPaths.HOST_PTY_PORT
-                + "-:" + RootlessPaths.GUEST_PTY_PORT
                 + ",hostfwd=tcp:" + RootlessPaths.HOST_LOOPBACK + ":" + RootlessPaths.HOST_SSH_PORT
                 + "-:" + RootlessPaths.GUEST_SSH_PORT);
         a.add("-device"); a.add("virtio-net-pci,netdev=net0,romfile=");
@@ -1014,12 +1096,25 @@ public final class RootlessEngine {
                 a.add("-fsdev"); a.add("local,id=fsdev0,security_model=none,path=" + share.getAbsolutePath());
                 a.add("-device"); a.add("virtio-9p-pci,fsdev=fsdev0,mount_tag=strykershare");
             } else {
-                Log.w(TAG, "9p share dir unavailable — booting without /sdcard share");
+                StrykerLog.w(TAG, "9p share dir unavailable — booting without /sdcard share");
             }
         }
         if (!shareActive) {
             GuestExec.logToStore("VM is booting WITHOUT the /sdcard capture share — handshakes and "
                     + "reports written inside the guest will not be visible to the app");
+        }
+
+        if (shareActive && shareInUse != null) {
+            try {
+                GuestSsh.configure(app, shareInUse, RootlessPaths.HOST_SSH_PORT);
+                GuestSsh.publishPublicKey();
+            } catch (Exception e) {
+                GuestExec.logToStore("could not place the app's ssh key in the share ("
+                        + e.getMessage() + ") — the guest will boot but cannot be reached");
+            }
+        } else {
+            GuestExec.logToStore("no share, so no ssh key exchange is possible: the guest will "
+                    + "boot but the app will not be able to run anything in it");
         }
 
         a.add("-chardev"); a.add("socket,id=serial0,path=" + RootlessPaths.serialSock(app).getAbsolutePath()
@@ -1047,8 +1142,13 @@ public final class RootlessEngine {
     }
 
 
-    private void ensureExecutable() {
-        try { RootlessPaths.qemuBin(app).setExecutable(true, false); } catch (Exception ignored) {}
+    private void ensureExecutable() throws java.io.IOException {
+        String problem = NativeExec.check(app,
+                RootlessPaths.qemuBin(app), RootlessPaths.libslirp(app));
+        if (problem != null) {
+            GuestExec.logToStore(problem);
+            throw new java.io.IOException(problem);
+        }
     }
 
     public File resolveShareDir() {
@@ -1087,16 +1187,13 @@ public final class RootlessEngine {
     }
 
     private static File withSubdirs(File base) {
-        //noinspection ResultOfMethodCallIgnored
         new File(base, "hs").mkdirs();
-        //noinspection ResultOfMethodCallIgnored
         new File(base, "captured").mkdirs();
-        //noinspection ResultOfMethodCallIgnored
         new File(base, "reports").mkdirs();
         return base;
     }
 
-    private void pumpBootLog(Process proc, BootListener listener) {
+    private void pumpBootLog(Process proc, GuestEngine.BootListener listener) {
         File log = RootlessPaths.bootLog(app);
         try (InputStream in = proc.getInputStream();
              BufferedReader br = new BufferedReader(new InputStreamReader(in));

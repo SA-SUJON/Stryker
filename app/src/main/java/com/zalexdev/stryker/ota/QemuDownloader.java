@@ -2,6 +2,8 @@ package com.zalexdev.stryker.ota;
 
 import android.content.Context;
 
+import com.zalexdev.stryker.engine.EngineType;
+
 public final class QemuDownloader {
 
     private QemuDownloader() {}
@@ -25,7 +27,10 @@ public final class QemuDownloader {
 
     public static Bundle resolve(Context context) {
         RemoteManifest manifest = ManifestService.fetch(context);
-        if (manifest != null && manifest.rootless != null && manifest.rootless.isComplete()) {
+        boolean umlOnly = EngineType.isUml(new com.zalexdev.stryker.utils.Core(context));
+        boolean usable = manifest != null && manifest.rootless != null
+                && (umlOnly ? manifest.rootless.isCompleteForUml() : manifest.rootless.isComplete());
+        if (usable) {
             RemoteManifest.RootlessAssets r = manifest.rootless;
             return new Bundle(r.qemu, r.kernel, r.initrd, r.libslirp, r.rootfs);
         }

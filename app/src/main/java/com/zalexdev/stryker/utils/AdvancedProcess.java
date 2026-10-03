@@ -28,7 +28,69 @@ public abstract class AdvancedProcess {
     public String tool;
     public boolean chroot;
     public boolean success = false;
+    private static final int MAX_KEPT_LINES = 400;
+
     public ArrayList<String> outputList = new ArrayList<>();
+
+    private final java.util.ArrayDeque<String> pending = new java.util.ArrayDeque<>();
+    private boolean drainScheduled = false;
+
+    private static final int MAX_PENDING = 2000;
+
+    private void deliver(String line) {
+        synchronized (pending) {
+            pending.addLast(line);
+            while (pending.size() > MAX_PENDING) pending.removeFirst();
+            if (drainScheduled) return;
+            drainScheduled = true;
+        }
+        activity.runOnUiThread(this::drain);
+    }
+
+    private void drain() {
+        java.util.ArrayList<String> batch;
+        synchronized (pending) {
+            batch = new java.util.ArrayList<>(pending);
+            pending.clear();
+            drainScheduled = false;
+        }
+        for (String l : batch) {
+            try {
+                onNewLine(l);
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    private void record(String line) {
+        synchronized (outputList) {
+            outputList.add(line);
+            if (outputList.size() > MAX_KEPT_LINES) {
+                outputList.subList(0, outputList.size() - MAX_KEPT_LINES).clear();
+            }
+        }
+    }
+
+    private String lastShape = null;
+    private int repeats = 0;
+
+    private static String shapeOf(String line) {
+        return line == null ? "" : line.replaceAll("[0-9]+", "#");
+    }
+
+    private boolean worthLogging(String line) {
+        String shape = shapeOf(line);
+        if (shape.equals(lastShape)) {
+            repeats++;
+            return false;
+        }
+        if (repeats > 0 && lastShape != null) {
+            logger.writeLine("… previous line repeated " + repeats + " times", 2, tool);
+            repeats = 0;
+        }
+        lastShape = shape;
+        return true;
+    }
     public Logger logger;
     public boolean running = true;
     public boolean noLog = false;
@@ -41,8 +103,8 @@ public abstract class AdvancedProcess {
         this.activity = activity;
         this.context = context;
         core = new Core(context);
-        this.cmd = command;
         this.tool = LogTool.classify(command);
+        this.cmd = lineBuffered(command);
         this.chroot = chroot;
         this.rootless = chroot && core.isRootless();
         this.logger = new Logger();
@@ -53,8 +115,8 @@ public abstract class AdvancedProcess {
         this.activity = activity;
         this.context = context;
         core = new Core(context);
-        this.cmd = command;
         this.tool = LogTool.classify(command);
+        this.cmd = lineBuffered(command);
         this.chroot = chroot;
         this.rootless = chroot && core.isRootless();
         this.logger = new Logger();
@@ -62,6 +124,19 @@ public abstract class AdvancedProcess {
             executeInMainThread();
         else
             execute();
+    }
+
+    private static final java.util.List<String> LIVE_OUTPUT_TOOLS = java.util.Arrays.asList(
+            "aireplay-ng", "airodump-ng", "airbase-ng", "aircrack-ng", "besside-ng",
+            "mdk4", "mdk3", "wash", "reaver", "bully", "hcxdumptool", "tcpdump", "tshark");
+
+    static String lineBuffered(String command) {
+        if (command == null) return null;
+        String trimmed = command.trim();
+        int space = trimmed.indexOf(' ');
+        String first = space < 0 ? trimmed : trimmed.substring(0, space);
+        if (!LIVE_OUTPUT_TOOLS.contains(first)) return command;
+        return "__SB=$(command -v stdbuf 2>/dev/null); $__SB ${__SB:+-oL -eL} " + trimmed;
     }
 
     public AdvancedProcess setNoLog(boolean noLog) {
@@ -92,34 +167,38 @@ public abstract class AdvancedProcess {
         logger.writeLine("Command: " + cmd, 1, tool);
         BufferedReader reader = new BufferedReader(new InputStreamReader(output));
         String line;
+        Thread errorPump = new Thread(() -> {
+            try (BufferedReader errorReader = new BufferedReader(new InputStreamReader(error))) {
+                String errLine;
+                while ((errLine = errorReader.readLine()) != null) {
+                    String trimmed = errLine.trim();
+                    if (!noLog) {
+                        logger.writeLine(trimmed, 3, tool);
+                    }
+                    record("[E] " + trimmed);
+                    if (!trimmed.startsWith(MACHINE_PREFIX)) {
+                        deliver(trimmed);
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }, "proc-stderr");
+        errorPump.setDaemon(true);
+        errorPump.start();
         try {
             while ((line = reader.readLine()) != null) {
                 line = line.trim();
                 String finalLine = line;
                 if (!finalLine.startsWith(MACHINE_PREFIX)) {
-                    activity.runOnUiThread(() -> onNewLine(finalLine));
+                    deliver(finalLine);
                 }
-                if (!noLog) {
+                if (!noLog && worthLogging(line)) {
                     logger.writeLine(line, 2, tool);
-                }else{
                 }
                 if (line.contains("JOBFINISHED")) {
                     process.destroy();
                 }
-                outputList.add(line);
-            }
-        } catch (Exception ignored) {
-
-        }
-        BufferedReader errorReader = new BufferedReader(new InputStreamReader(error));
-        try {
-            while ((line = errorReader.readLine()) != null) {
-                line = line.trim();
-                if (!noLog) {
-                    logger.writeLine(line, 3, tool);
-                }else{
-                }
-                outputList.add("[E] " + line);
+                record(line);
             }
         } catch (Exception ignored) {
 
@@ -128,6 +207,10 @@ public abstract class AdvancedProcess {
             process.waitFor();
         } catch (InterruptedException e) {
             e.printStackTrace();
+        }
+        try {
+            errorPump.join(1500);
+        } catch (InterruptedException ignored) {
         }
         process.destroy();
 
@@ -140,7 +223,7 @@ public abstract class AdvancedProcess {
         logger.writeLine("Rootless command: " + cmd, 1, tool);
         try {
             if (!killed) {
-                guestSession = core.rootless().openStream(cmd);
+                guestSession = core.guest().openStream(cmd);
                 String line;
                 while (!killed && (line = guestSession.reader.readLine()) != null) {
                     if (line.startsWith(GuestExec.Session.SENTINEL)) {
@@ -149,15 +232,15 @@ public abstract class AdvancedProcess {
                     line = line.trim();
                     String finalLine = line;
                     if (!finalLine.startsWith(MACHINE_PREFIX)) {
-                        activity.runOnUiThread(() -> onNewLine(finalLine));
+                        deliver(finalLine);
                     }
-                    if (!noLog) {
+                    if (!noLog && worthLogging(line)) {
                         logger.writeLine(line, 2, tool);
                     }
                     if (line.contains("JOBFINISHED")) {
                         break;
                     }
-                    outputList.add(line);
+                    record(line);
                 }
             }
         } catch (Exception e) {

@@ -1,7 +1,6 @@
 package com.zalexdev.stryker.engine;
 
 import android.content.Context;
-import android.util.Log;
 
 import com.zalexdev.stryker.utils.Core;
 
@@ -9,6 +8,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import com.stryker.terminal.bridge.StrykerLog;
 
 public final class GuestCore {
 
@@ -62,7 +62,7 @@ public final class GuestCore {
             while ((r = in.read(buf)) != -1) out.write(buf, 0, r);
             out.flush();
         } catch (Exception e) {
-            Log.w(TAG, "staging failed: " + e.getMessage());
+            StrykerLog.w(TAG, "staging failed: " + e.getMessage());
             return false;
         }
         core.customCommand("mkdir -p " + Core.CHROOT_ROOT);
@@ -70,7 +70,6 @@ public final class GuestCore {
                 + " -C " + Core.CHROOT_ROOT);
         core.customCommand("chmod -R 0755 " + Core.CHROOT_ROOT + "/CORE "
                 + Core.CHROOT_ROOT + "/exploits");
-        //noinspection ResultOfMethodCallIgnored
         staged.delete();
         return core.checkFile(Core.CHROOT_ROOT + MARKER);
     }

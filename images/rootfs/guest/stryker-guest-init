@@ -1,0 +1,91 @@
+#!/bin/sh
+set -u
+
+MARK() { printf 'STRYKER_INIT %s\n' "$*" > /dev/console 2>/dev/null; }
+log()  { printf 'stryker-init: %s\n' "$*"; MARK "$*"; }
+
+SHARE=
+for candidate in /sdcard/Stryker /host /sdcard; do
+	if [ -d "$candidate" ] && mountpoint -q "$candidate" 2>/dev/null; then
+		SHARE=$candidate
+		break
+	fi
+done
+if [ -z "$SHARE" ] && [ ! -d /sdcard/Stryker/.ssh ]; then
+	mkdir -p /sdcard/Stryker 2>/dev/null
+	if mount -t 9p -o trans=virtio,version=9p2000.L,msize=262144 \
+			strykershare /sdcard/Stryker 2>/dev/null; then
+		SHARE=/sdcard/Stryker
+	fi
+fi
+[ -n "$SHARE" ] || SHARE=/sdcard/Stryker
+mkdir -p "$SHARE" 2>/dev/null
+
+KEYDIR=$SHARE/.ssh
+mkdir -p "$KEYDIR" "$SHARE/hs" "$SHARE/captured" "$SHARE/reports" \
+         "$SHARE/wordlists" 2>/dev/null
+
+if [ ! -f /etc/ssh/ssh_host_ed25519_key ]; then
+	log "first boot: generating host keys"
+	ssh-keygen -A >/dev/null 2>&1
+fi
+if [ -f /etc/ssh/ssh_host_ed25519_key.pub ]; then
+	cat /etc/ssh/ssh_host_*_key.pub > "$KEYDIR/host_keys.pub" 2>/dev/null
+	ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub > "$KEYDIR/host_fingerprint" 2>/dev/null
+	chmod 644 "$KEYDIR/host_keys.pub" "$KEYDIR/host_fingerprint" 2>/dev/null
+fi
+
+if [ -f "$KEYDIR/authorized_keys" ]; then
+	mkdir -p /root/.ssh
+	if ! cmp -s "$KEYDIR/authorized_keys" /root/.ssh/authorized_keys; then
+		cp -f "$KEYDIR/authorized_keys" /root/.ssh/authorized_keys
+		log "installed the app's public key"
+	fi
+	chown -R root:root /root/.ssh
+	chmod 700 /root/.ssh
+	chmod 600 /root/.ssh/authorized_keys
+else
+	log "no authorized_keys in the share yet -- the app will place one"
+fi
+
+passwd -l root >/dev/null 2>&1
+
+root_dev=$(findmnt -no SOURCE / 2>/dev/null)
+case "$root_dev" in
+	/dev/*)
+		if resize2fs "$root_dev" >/dev/null 2>&1; then
+			log "filesystem grown to fill $root_dev"
+		fi
+		;;
+esac
+
+if command -v iw >/dev/null 2>&1; then
+	iw reg set "${STRYKER_REGDOM:-00}" >/dev/null 2>&1
+fi
+
+for m in loop squashfs overlay; do
+	modprobe "$m" >/dev/null 2>&1
+done
+
+if grep -qw hostfs /proc/filesystems 2>/dev/null; then
+	engine=uml
+else
+	engine=vm
+fi
+
+if [ "$engine" = uml ] && [ -x /usr/local/lib/stryker/systemctl ]; then
+	ln -sf /usr/local/lib/stryker/systemctl /usr/local/sbin/systemctl 2>/dev/null
+	log "no systemd here: /usr/local/sbin/systemctl is the shim"
+else
+	[ -L /usr/local/sbin/systemctl ] && rm -f /usr/local/sbin/systemctl
+fi
+{
+	printf 'ready=1\n'
+	printf 'kernel=%s\n' "$(uname -r)"
+	printf 'engine=%s\n' "$engine"
+	printf 'share=%s\n' "$SHARE"
+} > "$KEYDIR/ready" 2>/dev/null
+chmod 644 "$KEYDIR/ready" 2>/dev/null
+
+log "ready (ssh on 22, share $SHARE)"
+exit 0

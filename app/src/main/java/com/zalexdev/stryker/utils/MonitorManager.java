@@ -92,8 +92,10 @@ public class MonitorManager {
     }
 
     private boolean enableMonitorModeRootless(String ifc, String channel){
-        if (!core.rootless().ensureUsbWifiAttached()) {
-            logger.writeLine("No USB Wi-Fi adapter attached to the VM — cannot enable monitor mode", 3);
+        com.zalexdev.stryker.engine.GuestEngine guest = core.guest();
+        if (!guest.ensureUsbWifiAttached()) {
+            logger.writeLine("No USB Wi-Fi adapter in " + guest.displayName()
+                    + " — cannot enable monitor mode", 3);
             return false;
         }
         if (!isMonitorModeEnabled(ifc)) {

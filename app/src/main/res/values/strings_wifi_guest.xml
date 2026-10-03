@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<resources>
+
+    <string name="wifi_nodriver_title">Android can\'t use this adapter</string>
+    <string name="wifi_nodriver_body">%1$s is plugged in, but Android\'s kernel has no driver for it — and a driver can\'t be added to a running Android.\n\nStryker can run Wi-Fi inside Linux, which does have the driver. Everything else keeps using root.</string>
+    <string name="wifi_nodriver_setup">Set it up</string>
+    <string name="wifi_nodriver_later">Not now</string>
+
+    <string name="wifi_nodriver_state_title">No driver for this adapter</string>
+    <string name="wifi_nodriver_state_body">%1$s won\'t work under Android\'s kernel. Run Wi-Fi in Linux instead.</string>
+    <string name="wifi_nodriver_state_action">Run Wi-Fi in Linux</string>
+    <string name="wifi_nodriver_state_status">No driver</string>
+
+    <string name="wifi_guest_title">Run Wi-Fi in Linux</string>
+    <string name="wifi_guest_subtitle">Everything else keeps using root</string>
+    <string name="wifi_guest_start">Start</string>
+    <string name="wifi_guest_retry">Try again</string>
+    <string name="wifi_guest_done">Done</string>
+    <string name="wifi_guest_cancel">Cancel</string>
+    <string name="wifi_guest_close">Close</string>
+
+    <string name="wifi_guest_step_adapter">Adapter</string>
+    <string name="wifi_guest_step_device">This phone</string>
+    <string name="wifi_guest_step_engine">Linux engine</string>
+    <string name="wifi_guest_step_files">Download</string>
+    <string name="wifi_guest_step_boot">Start Linux</string>
+    <string name="wifi_guest_step_passthrough">Adapter handover</string>
+    <string name="wifi_guest_step_interface">Wi-Fi interface</string>
+
+    <string name="wifi_guest_running_warning">About 500 MB to download, a few minutes to set up. Keep Stryker open.</string>
+
+    <string name="wifi_guest_active_meta">%1$s · Linux</string>
+    <string name="wifi_guest_settings_title">Wi-Fi engine</string>
+    <string name="wifi_guest_settings_on">%1$s · Android has no driver for this adapter</string>
+    <string name="wifi_guest_turn_off">Turn off</string>
+    <string name="wifi_guest_turn_off_body">Wi-Fi goes back to Android\'s kernel, and this adapter stops working until you set Linux up again.</string>
+
+    <string name="wifi_guest_down_title">Linux isn\'t running</string>
+    <string name="wifi_guest_down_body">Wi-Fi on this phone runs inside Linux, and it didn\'t start. Try again, or open the VM log to see why.</string>
+
+    <string name="wifi_guest_adapter_changed_title">A different adapter</string>
+    <string name="wifi_guest_adapter_changed_body">Wi-Fi was set up for %1$s. %2$s is plugged in now, and Linux may have no driver for it.</string>
+    <string name="wifi_guest_adapter_changed_action">Check it</string>
+
+    <string name="wg_looking">Looking for it</string>
+    <string name="wg_checking">Checking</string>
+    <string name="wg_no_adapter">Nothing plugged in</string>
+    <string name="wg_no_adapter_body">Plug the adapter in, then start again.</string>
+    <string name="wg_not_arm64">Needs a 64-bit ARM phone</string>
+    <string name="wg_not_arm64_body">Linux can\'t run on this processor.</string>
+    <string name="wg_low_space">Only %1$s free</string>
+    <string name="wg_low_space_body">Free up %1$s, then start again.</string>
+    <string name="wg_device_ok">arm64 · %1$s free</string>
+    <string name="wg_device_ok_short">arm64</string>
+    <string name="wg_choosing">Picking one</string>
+    <string name="wg_probing">Trying the lightweight kernel</string>
+    <string name="wg_engine_installed">%1$s · already installed</string>
+    <string name="wg_downloading">Downloading</string>
+    <string name="wg_offline">No internet</string>
+    <string name="wg_offline_body">The download comes from GitHub. Connect, then start again.</string>
+    <string name="wg_install_failed">Install failed</string>
+    <string name="wg_check_log">Open the log to see why.</string>
+    <string name="wg_missing">Missing: %1$s</string>
+    <string name="wg_missing_body">The install finished without everything Linux needs.</string>
+    <string name="wg_files_ready">Ready</string>
+    <string name="wg_booting">Starting · the first time is slow</string>
+    <string name="wg_boot_failed">Didn\'t start</string>
+    <string name="wg_boot_ok">%1$s is running</string>
+    <string name="wg_usb_asking">Asking Android for USB access</string>
+    <string name="wg_usb_failed">Android kept the adapter</string>
+    <string name="wg_usb_failed_body">Allow USB access when Android asks, then start again.</string>
+    <string name="wg_iface_waiting">Waiting for the driver</string>
+    <string name="wg_iface_failed">Linux has no driver either</string>
+    <string name="wg_iface_failed_body">This adapter isn\'t supported by the Linux kernel Stryker ships. Open the log for what it reported.</string>
+    <string name="wg_done_body">Wi-Fi now runs in %1$s. Everything else keeps using root.</string>
+    <string name="wg_cancelling">Stopping</string>
+    <string name="wg_cancelled">Cancelled</string>
+    <string name="wg_unexpected">Something went wrong</string>
+    <string name="wg_unexpected_body">Setup stopped: %1$s</string>
+
+    <string name="hs_wordlist_missing">%1$s could not be reached</string>
+    <string name="hs_wordlist_missing_toast">That wordlist is on the phone but nothing could hand it to the cracker. Re-import it from the Wordlists screen.</string>
+
+</resources>

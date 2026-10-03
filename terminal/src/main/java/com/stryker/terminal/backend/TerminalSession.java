@@ -6,12 +6,12 @@ import android.os.Message;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.system.OsConstants;
-import android.util.Log;
 
 import java.io.*;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import com.stryker.terminal.bridge.StrykerLog;
 
 public class TerminalSession extends TerminalOutput {
 
@@ -43,7 +43,7 @@ public class TerminalSession extends TerminalOutput {
       descriptorField.setAccessible(true);
       descriptorField.set(result, fileDescriptor);
     } catch (NoSuchFieldException | IllegalAccessException | IllegalArgumentException e) {
-      Log.wtf(EmulatorDebug.LOG_TAG, "Error accessing FileDescriptor#descriptor private field", e);
+      StrykerLog.wtf(EmulatorDebug.LOG_TAG, "Error accessing FileDescriptor#descriptor private field", e);
       System.exit(1);
     }
     return result;
@@ -75,6 +75,41 @@ public class TerminalSession extends TerminalOutput {
   private boolean mSockMode;
   private java.io.Closeable mConn;
   private static final int SOCK_ALIVE_PID = 0x7FFF0000;
+
+  public interface RemoteShell {
+    InputStream getInputStream();
+
+    OutputStream getOutputStream();
+
+    void resize(int columns, int rows);
+
+    void close();
+  }
+
+  public interface RemoteShellFactory {
+    RemoteShell open(String target, int columns, int rows) throws Exception;
+  }
+
+  private static volatile RemoteShellFactory sRemoteShellFactory;
+  private volatile RemoteShell mRemote;
+
+  public static void setRemoteShellFactory(RemoteShellFactory factory) {
+    sRemoteShellFactory = factory;
+  }
+
+  public interface ShellChooser {
+    String strykerShellPath();
+  }
+
+  private static volatile ShellChooser sShellChooser;
+
+  public static void setShellChooser(ShellChooser chooser) {
+    sShellChooser = chooser;
+  }
+
+  public static ShellChooser shellChooser() {
+    return sShellChooser;
+  }
 
   public String mSessionName;
 
@@ -124,17 +159,17 @@ public class TerminalSession extends TerminalOutput {
     if (mEmulator == null) {
       initializeEmulator(columns, rows);
     } else {
-      if (!mSockMode) JNI.setPtyWindowSize(mTerminalFileDescriptor, rows, columns);
+      RemoteShell remote = mRemote;
+      if (remote != null) {
+        remote.resize(columns, rows);
+      } else if (!mSockMode) {
+        JNI.setPtyWindowSize(mTerminalFileDescriptor, rows, columns);
+      }
       mEmulator.resize(columns, rows);
-      pushVmWindowSize(columns, rows);
+      if (remote == null) pushVmWindowSize(columns, rows);
     }
   }
 
-  /**
-   * The rootless VM runs its own PTY behind a socket, so the local TIOCSWINSZ above never reaches
-   * it. stryker-ch drops a marker while it is attached to the guest's resizable PTY server; only
-   * then is it safe to send the out-of-band frame, which that server consumes.
-   */
   private void pushVmWindowSize(int columns, int rows) {
     if (mShellPid <= 0) return;
     if (!new java.io.File(VM_RESIZE_MARKER).exists()) return;
@@ -151,7 +186,7 @@ public class TerminalSession extends TerminalOutput {
     mEmulator = new TerminalEmulator(this, columns, rows, 2000);
 
     if (mShellPath != null && (mShellPath.startsWith("tcp:") || mShellPath.startsWith("pty:")
-        || mShellPath.startsWith("unix:"))) {
+        || mShellPath.startsWith("ssh:") || mShellPath.startsWith("unix:"))) {
       initializeSocket();
       return;
     }
@@ -208,7 +243,8 @@ public class TerminalSession extends TerminalOutput {
 
     final boolean unix = mShellPath.startsWith("unix:");
     final boolean pty = mShellPath.startsWith("pty:");
-    final boolean translateCr = !unix && !pty;
+    final boolean ssh = mShellPath.startsWith("ssh:");
+    final boolean translateCr = !unix && !pty && !ssh;
     final String label = unix ? mShellPath.substring(5) : mShellPath.substring(4);
 
     new Thread("TermSockConnect") {
@@ -217,7 +253,18 @@ public class TerminalSession extends TerminalOutput {
         InputStream in;
         OutputStream out;
         try {
-          if (unix) {
+          if (ssh) {
+            RemoteShellFactory factory = sRemoteShellFactory;
+            if (factory == null) throw new IllegalStateException("no remote shell factory registered");
+            RemoteShell r = factory.open(label, mEmulator != null ? mEmulator.mColumns : 80,
+                mEmulator != null ? mEmulator.mRows : 24);
+            mRemote = r;
+            mConn = new java.io.Closeable() {
+              @Override public void close() { r.close(); }
+            };
+            in = r.getInputStream();
+            out = r.getOutputStream();
+          } else if (unix) {
             android.net.LocalSocket ls = new android.net.LocalSocket();
             ls.connect(new android.net.LocalSocketAddress(label,
                 android.net.LocalSocketAddress.Namespace.FILESYSTEM));
@@ -264,7 +311,9 @@ public class TerminalSession extends TerminalOutput {
           }
         }.start();
 
-        try { out.write('\n'); out.flush(); } catch (Exception ignored) {}
+        if (!ssh && !pty) {
+            try { out.write('\n'); out.flush(); } catch (Exception ignored) {}
+        }
 
         final byte[] buffer = new byte[4096];
         try {
@@ -338,7 +387,7 @@ public class TerminalSession extends TerminalOutput {
       try {
         Os.kill(mShellPid, OsConstants.SIGKILL);
       } catch (ErrnoException e) {
-        Log.w("neoterm-shell-session",
+        StrykerLog.w("neoterm-shell-session",
           "Failed sending SIGKILL: " + e.getMessage());
       }
     }

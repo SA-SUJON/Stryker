@@ -4,7 +4,6 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.os.AsyncTask;
-import android.util.Log;
 
 import com.zalexdev.stryker.engine.GuestExec;
 import com.zalexdev.stryker.utils.Core;
@@ -14,6 +13,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import com.stryker.terminal.bridge.StrykerLog;
 
 public class ScanTarget extends AsyncTask<Void, String, Boolean> {
 
@@ -90,7 +90,7 @@ public class ScanTarget extends AsyncTask<Void, String, Boolean> {
             process.waitFor();
             process.destroy();
         } catch (IOException | InterruptedException e) {
-            Log.d("NmapScan", "exception: " + e.getMessage());
+            StrykerLog.d("NmapScan", "exception: " + e.getMessage());
         }
         return ok && !killed;
     }
@@ -102,7 +102,7 @@ public class ScanTarget extends AsyncTask<Void, String, Boolean> {
         }
         boolean ok = false;
         try {
-            guestSession = core.rootless().openStream(command);
+            guestSession = core.guest().openStream(command);
             BufferedReader br = guestSession.reader;
             String line;
             while (!killed && (line = br.readLine()) != null) {
@@ -117,7 +117,7 @@ public class ScanTarget extends AsyncTask<Void, String, Boolean> {
                 publishProgress(line);
             }
         } catch (IOException e) {
-            Log.d("NmapScan", "rootless exception: " + e.getMessage());
+            StrykerLog.d("NmapScan", "rootless exception: " + e.getMessage());
         } finally {
             if (guestSession != null) {
                 try {

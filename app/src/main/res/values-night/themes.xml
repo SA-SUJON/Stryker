@@ -27,4 +27,5 @@
         <item name="android:windowIsTranslucent">true</item>
     </style>
 
+    <style name="Theme.Stryker.Immersive" parent="Theme.Stryker" />
 </resources>

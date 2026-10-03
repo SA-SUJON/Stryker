@@ -120,14 +120,15 @@ public final class PayloadGenerator {
                                 java.util.regex.Pattern.compile("created:\\s*'([^']+)'").matcher(created);
                         if (!m.find()) return;
                         new Thread(() -> {
-                            core.customChrootCommand("mkdir -p /sdcard/Stryker/payloads", true);
+                            core.customChrootCommand("mkdir -p " + core.guestShare() + "/payloads", true);
                             String srcPath = m.group(1).replaceAll("/+", "/");
                             String baseName = srcPath.substring(srcPath.lastIndexOf('/') + 1);
                             int dot = baseName.lastIndexOf('.');
                             String ext = dot >= 0 ? baseName.substring(dot) : "";
                             String fileName = name + ext;
                             core.customChrootCommand(
-                                    "cp '" + srcPath + "' '/sdcard/Stryker/payloads/" + fileName + "'",
+                                    "cp '" + srcPath + "' '" + core.guestShare() + "/payloads/"
+                                            + fileName + "'",
                                     true);
                         }).start();
                     }

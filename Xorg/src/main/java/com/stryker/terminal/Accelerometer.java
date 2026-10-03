@@ -1,24 +1,3 @@
-/*
-Simple DirectMedia Layer
-Java source code (C) 2009-2014 Sergii Pylypenko
-
-This software is provided 'as-is', without any express or implied
-warranty.  In no event will the authors be held liable for any damages
-arising from the use of this software.
-
-Permission is granted to anyone to use this software for any purpose,
-including commercial applications, and to alter it and redistribute it
-freely, subject to the following restrictions:
-
-1. The origin of this software must not be misrepresented; you must not
-   claim that you wrote the original software. If you use this software
-   in a product, an acknowledgment in the product documentation would be
-   appreciated but is not required. 
-2. Altered source versions must be plainly marked as such, and must not be
-   misrepresented as being the original software.
-3. This notice may not be removed or altered from any source distribution.
-*/
-
 package com.stryker.terminal;
 
 import android.content.Context;
@@ -26,10 +5,10 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
-import android.util.Log;
 import androidx.appcompat.app.AppCompatActivity;
 
 import java.util.Arrays;
+import com.stryker.terminal.bridge.StrykerLog;
 
 
 @SuppressWarnings("JniMissingFunction")
@@ -46,7 +25,7 @@ class AccelerometerReader implements SensorEventListener {
 
   public synchronized void stop() {
     if (_manager != null) {
-      Log.i("SDL", "libSDL: stopping accelerometer/gyroscope/orientation");
+      StrykerLog.i("SDL", "libSDL: stopping accelerometer/gyroscope/orientation");
       _manager.unregisterListener(this);
       _manager.unregisterListener(gyro);
       _manager.unregisterListener(orientation);
@@ -56,17 +35,17 @@ class AccelerometerReader implements SensorEventListener {
   public synchronized void start() {
     if ((Globals.UseAccelerometerAsArrowKeys || Globals.AppUsesAccelerometer) &&
       _manager != null && _manager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null) {
-      Log.i("SDL", "libSDL: starting accelerometer");
+      StrykerLog.i("SDL", "libSDL: starting accelerometer");
       _manager.registerListener(this, _manager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_GAME);
     }
     if ((Globals.AppUsesGyroscope || Globals.MoveMouseWithGyroscope) &&
       _manager != null && _manager.getDefaultSensor(Sensor.TYPE_GYROSCOPE) != null) {
-      Log.i("SDL", "libSDL: starting gyroscope");
+      StrykerLog.i("SDL", "libSDL: starting gyroscope");
       _manager.registerListener(gyro, _manager.getDefaultSensor(Sensor.TYPE_GYROSCOPE), SensorManager.SENSOR_DELAY_GAME);
     }
     if ((Globals.AppUsesOrientationSensor) && _manager != null &&
       _manager.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR) != null) {
-      Log.i("SDL", "libSDL: starting orientation sensor");
+      StrykerLog.i("SDL", "libSDL: starting orientation sensor");
       _manager.registerListener(orientation, _manager.getDefaultSensor(
         Sensor.TYPE_GAME_ROTATION_VECTOR),
         SensorManager.SENSOR_DELAY_GAME);
@@ -132,13 +111,13 @@ class AccelerometerReader implements SensorEventListener {
         return;
 
       measurementIteration++;
-      Log.d("SDL", "GYRO_NOISE: Measuring in progress... " + measurementIteration);
+      StrykerLog.d("SDL", "GYRO_NOISE: Measuring in progress... " + measurementIteration);
       if (measurementIteration > 5) {
         System.arraycopy(noiseMin, 0, filterMin, 0, filterMin.length);
         System.arraycopy(noiseMax, 0, filterMax, 0, filterMax.length);
       }
       if (measurementIteration > 15) {
-        Log.d("SDL", "GYRO_NOISE: Measuring done! Maximum number of iterations reached: " + measurementIteration);
+        StrykerLog.d("SDL", "GYRO_NOISE: Measuring done! Maximum number of iterations reached: " + measurementIteration);
         noiseData = null;
         measuredNoiseRange = null;
         return;
@@ -165,7 +144,7 @@ class AccelerometerReader implements SensorEventListener {
         }
       }
 
-      Log.d("SDL", "GYRO_NOISE: MIN MAX: " + Arrays.toString(noiseMin) + " " + Arrays.toString(noiseMax));
+      StrykerLog.d("SDL", "GYRO_NOISE: MIN MAX: " + Arrays.toString(noiseMin) + " " + Arrays.toString(noiseMax));
 
       if (!changed)
         return;
@@ -174,7 +153,7 @@ class AccelerometerReader implements SensorEventListener {
       for (int i = 0; i < noiseMin.length; i++)
         range[i] = noiseMax[i] - noiseMin[i];
 
-      Log.d("SDL", "GYRO_NOISE: RANGE:   " + Arrays.toString(range) + " " + Arrays.toString(measuredNoiseRange));
+      StrykerLog.d("SDL", "GYRO_NOISE: RANGE:   " + Arrays.toString(range) + " " + Arrays.toString(measuredNoiseRange));
 
       if (measuredNoiseRange == null) {
         measuredNoiseRange = range;
@@ -192,7 +171,7 @@ class AccelerometerReader implements SensorEventListener {
       System.arraycopy(noiseMax, 0, filterMax, 0, filterMax.length);
       noiseData = null;
       measuredNoiseRange = null;
-      Log.d("SDL", "GYRO_NOISE: Measuring done! Range converged on iteration " + measurementIteration);
+      StrykerLog.d("SDL", "GYRO_NOISE: Measuring done! Range converged on iteration " + measurementIteration);
     }
 
     public void onSensorChanged(final SensorEvent event) {

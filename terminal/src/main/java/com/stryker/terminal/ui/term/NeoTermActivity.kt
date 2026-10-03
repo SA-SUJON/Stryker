@@ -524,10 +524,13 @@ class NeoTermActivity : AppCompatActivity(), ServiceConnection, SharedPreference
     val sessionCallback = TermSessionCallback()
     val viewClient = TermViewClient(this)
 
-    val rootless = java.io.File(filesDir, "rootless/.active").exists()
+    val chosen = com.stryker.terminal.backend.TerminalSession.shellChooser()?.strykerShellPath()
     val parameter = ShellParameter().callback(sessionCallback)
-    if (rootless) {
-      parameter.executablePath("pty:127.0.0.1:1051")
+    if (chosen != null) {
+      parameter.executablePath(chosen)
+      if (!chosen.startsWith("ssh:")) parameter.initialCommand("clear")
+    } else if (java.io.File(filesDir, "rootless/.active").exists()) {
+      parameter.executablePath("ssh:guest")
     } else {
       parameter
         .executablePath("${NeoTermPath.BIN_PATH}/stryker-ch")

@@ -9,6 +9,7 @@ import com.stryker.terminal.bridge.SessionId
 import com.stryker.terminal.component.ComponentManager
 import com.stryker.terminal.component.colorscheme.ColorSchemeComponent
 import com.stryker.terminal.component.config.DefaultValues
+import com.stryker.terminal.component.config.ExecPolicy
 import com.stryker.terminal.component.config.NeoPreference
 import com.stryker.terminal.component.config.NeoTermPath
 import com.stryker.terminal.component.font.FontComponent
@@ -297,10 +298,13 @@ open class ShellTermSession private constructor(
         shellProfile.loginShell
 
       val args = this.args ?: mutableListOf(shell)
+
+      val launch = ExecPolicy.rewrite(context, shell, args)
+
       val env = transformEnvironment(this.env) ?: buildEnvironment(cwd, systemShell)
       val callback = changeCallback ?: TermSessionCallback()
       return ShellTermSession(
-        shell, cwd, args.toTypedArray(), env, callback,
+        launch.program, cwd, launch.argv.toTypedArray(), env, callback,
         initialCommand ?: "", shellProfile
       )
     }

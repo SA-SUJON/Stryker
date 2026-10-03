@@ -21,7 +21,7 @@ public final class VmStats {
         public long totalRamBytes;
     }
 
-    private static final String QEMU_MARK = "qemu-system";
+    private static final String[] GUEST_BINARIES = {"libqemu.so", "libuml.so"};
     private static final long PID_RESCAN_MS = 2500L;
     private static final double MIN_DELTA_SEC = 0.15d;
 
@@ -109,7 +109,7 @@ public final class VmStats {
 
     private int resolvePid() {
         if (pid > 0) {
-            if (new File("/proc/" + pid).exists()) return pid;
+            if (isGuest(pid)) return pid;
             pid = -1;
             lastJiffies = -1L;
             lastSampleNs = 0L;
@@ -117,11 +117,11 @@ public final class VmStats {
         long now = System.currentTimeMillis();
         if (now - lastPidScan < PID_RESCAN_MS) return -1;
         lastPidScan = now;
-        pid = scanForQemu();
+        pid = scanForGuest();
         return pid;
     }
 
-    private int scanForQemu() {
+    private int scanForGuest() {
         try {
             String[] entries = new File("/proc").list();
             if (entries == null) return -1;
@@ -132,13 +132,44 @@ public final class VmStats {
                 } catch (NumberFormatException e) {
                     continue;
                 }
-                String cmd = readSmall("/proc/" + candidate + "/cmdline", 512);
-                if (cmd == null || cmd.isEmpty()) continue;
-                if (cmd.contains(QEMU_MARK)) return candidate;
+                if (isGuest(candidate)) return candidate;
             }
         } catch (Throwable ignored) {
         }
         return -1;
+    }
+
+    private static boolean isGuest(int candidate) {
+        String argv0 = argv0(candidate);
+        if (argv0 == null || argv0.isEmpty()) return false;
+        int slash = argv0.lastIndexOf('/');
+        String name = slash < 0 ? argv0 : argv0.substring(slash + 1);
+        for (String binary : GUEST_BINARIES) {
+            if (name.equals(binary)) return true;
+        }
+        return name.startsWith("qemu-system");
+    }
+
+    private static String argv0(int candidate) {
+        FileInputStream in = null;
+        try {
+            in = new FileInputStream("/proc/" + candidate + "/cmdline");
+            byte[] buf = new byte[512];
+            int n = in.read(buf);
+            if (n <= 0) return null;
+            int end = 0;
+            while (end < n && buf[end] != 0) end++;
+            return new String(buf, 0, end, StandardCharsets.UTF_8);
+        } catch (Throwable t) {
+            return null;
+        } finally {
+            if (in != null) {
+                try {
+                    in.close();
+                } catch (Throwable ignored) {
+                }
+            }
+        }
     }
 
     private long readProcessJiffies(int target) {

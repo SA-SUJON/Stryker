@@ -1,6 +1,5 @@
 package com.zalexdev.stryker.metasploit.utils;
 
-import android.util.Log;
 
 import com.zalexdev.stryker.engine.GuestExec;
 import com.zalexdev.stryker.engine.RootlessPaths;
@@ -16,6 +15,7 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import com.stryker.terminal.bridge.StrykerLog;
 
 public class MsfRpcConsole {
 
@@ -40,7 +40,7 @@ public class MsfRpcConsole {
     private final String label;
 
     private volatile Process process;
-    private volatile Socket socket;
+    private volatile com.jcraft.jsch.ChannelShell channel;
     private volatile OutputStream stdin;
     private volatile BufferedReader stdout;
     private volatile boolean eof;
@@ -101,7 +101,7 @@ public class MsfRpcConsole {
             publishState(State.DEAD, eof ? "msfconsole exited" : "boot timeout");
             return false;
         } catch (IOException e) {
-            Log.e(TAG, label + " boot failed", e);
+            StrykerLog.e(TAG, label + " boot failed", e);
             publishState(State.DEAD, e.getMessage() == null ? "io error" : e.getMessage());
             return false;
         }
@@ -119,7 +119,7 @@ public class MsfRpcConsole {
                 }
                 return line;
             } catch (java.net.SocketTimeoutException idle) {
-                if (socket == null || socket.isClosed()) {
+                if (channel == null || !channel.isConnected()) {
                     eof = true;
                     return null;
                 }
@@ -145,7 +145,7 @@ public class MsfRpcConsole {
             stdin.flush();
             return null;
         } catch (IOException e) {
-            Log.e(TAG, label + " su channel failed", e);
+            StrykerLog.e(TAG, label + " su channel failed", e);
             return e.getMessage() == null ? "io error" : e.getMessage();
         }
     }
@@ -153,28 +153,25 @@ public class MsfRpcConsole {
     private String openGuestChannel() {
         if (!GuestExec.ping(GUEST_CONNECT_TIMEOUT_MS)) {
             try {
-                if (!core.rootless().startBlocking(null)) return "VM is not running";
+                if (!core.guest().startBlocking(null)) return "VM is not running";
             } catch (Throwable t) {
                 return "VM is not running";
             }
         }
         try {
-            Socket s = new Socket();
-            s.connect(new InetSocketAddress(RootlessPaths.HOST_LOOPBACK, RootlessPaths.HOST_EXEC_PORT),
-                    GUEST_CONNECT_TIMEOUT_MS);
-            s.setKeepAlive(true);
-            s.setSoTimeout(GUEST_READ_SLICE_MS);
-            socket = s;
-            stdin = s.getOutputStream();
-            stdout = new BufferedReader(new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
+            com.jcraft.jsch.ChannelShell c = com.zalexdev.stryker.engine.GuestSsh.interactiveShell();
+            stdin = c.getOutputStream();
+            stdout = new BufferedReader(new InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8));
+            c.connect(GUEST_CONNECT_TIMEOUT_MS);
+            channel = c;
             stdin.write(GUEST_ENV.getBytes(StandardCharsets.UTF_8));
             stdin.flush();
             stdin.write(GUEST_LAUNCH.getBytes(StandardCharsets.UTF_8));
             stdin.flush();
             return null;
-        } catch (IOException e) {
-            Log.e(TAG, label + " guest channel failed", e);
-            return "VM unreachable on :" + RootlessPaths.HOST_EXEC_PORT;
+        } catch (Exception e) {
+            StrykerLog.e(TAG, label + " guest channel failed", e);
+            return "guest unreachable over ssh on :" + RootlessPaths.HOST_SSH_PORT;
         }
     }
 
@@ -206,7 +203,7 @@ public class MsfRpcConsole {
                 }
                 publishState(State.DEAD, eof ? "msfconsole exited" : "command timeout");
             } catch (Exception e) {
-                Log.e(TAG, label + " io error in command", e);
+                StrykerLog.e(TAG, label + " io error in command", e);
                 publishState(State.DEAD, e.getMessage() == null ? "io error" : e.getMessage());
             }
         }
@@ -238,7 +235,7 @@ public class MsfRpcConsole {
 
     public boolean isProcessAlive() {
         if (eof) return false;
-        if (socket != null) return !socket.isClosed();
+        if (channel != null) return channel.isConnected();
         if (process == null) return false;
         try {
             process.exitValue();
@@ -251,18 +248,18 @@ public class MsfRpcConsole {
     private void teardown(String why) {
         try { if (stdin != null) stdin.close(); } catch (IOException ignored) {}
         try { if (stdout != null) stdout.close(); } catch (IOException ignored) {}
-        if (socket != null) {
-            try { socket.close(); } catch (IOException ignored) {}
+        if (channel != null) {
+            try { channel.disconnect(); } catch (Exception ignored) {}
         }
         if (process != null) {
             try { process.destroy(); } catch (Exception ignored) {}
         }
         process = null;
-        socket = null;
+        channel = null;
         stdin = null;
         stdout = null;
         eof = false;
-        Log.d(TAG, label + " torn down (" + why + ")");
+        StrykerLog.d(TAG, label + " torn down (" + why + ")");
     }
 
     private void startStderrPump(final InputStream err) {

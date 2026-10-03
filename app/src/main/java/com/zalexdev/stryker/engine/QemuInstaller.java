@@ -2,7 +2,6 @@ package com.zalexdev.stryker.engine;
 
 import android.content.Context;
 import android.content.res.AssetManager;
-import android.util.Log;
 
 import com.zalexdev.stryker.ota.QemuDownloader;
 
@@ -12,6 +11,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.zip.GZIPInputStream;
+import com.stryker.terminal.bridge.StrykerLog;
 
 public final class QemuInstaller {
 
@@ -65,53 +65,62 @@ public final class QemuInstaller {
         try {
             String[] files = c.getAssets().list(ASSET_DIR);
             if (files == null) return false;
-            boolean q = false, k = false, l = false, ird = false;
+            boolean k = false, ird = false;
             for (String f : files) {
-                if (f.equals("qemu-system-aarch64")) q = true;
-                else if (f.equals("Image")) k = true;
-                else if (f.equals("libslirp.so")) l = true;
+                if (f.equals("Image")) k = true;
                 else if (f.equals("initrd.img")) ird = true;
             }
-            return q && k && l && ird && rootfsAssetName(c) != null;
+            return k && ird && rootfsAssetName(c) != null;
         } catch (IOException e) {
             return false;
         }
     }
 
-    public static boolean install(Context context, Progress p) {
-        if (!assetsPresent(context)) {
-            log(p, 1, "No bundled artifacts — fetching the engine from the release");
-            return installFromNetwork(context, p);
-        }
-        return installFromAssets(context, p);
+    public enum Outcome {
+        OK,
+        OFFLINE,
+        FAILED;
+
+        public boolean ok() { return this == OK; }
     }
 
-    private static boolean installFromAssets(Context context, Progress p) {
+    public static Outcome install(Context context, Progress p) {
+        return install(context, p, EngineType.active(new com.zalexdev.stryker.utils.Core(context)));
+    }
+
+    public static Outcome install(Context context, Progress p, EngineType target) {
+        if (!assetsPresent(context)) {
+            log(p, 1, "No bundled artifacts — fetching the engine from the release");
+            return installFromNetwork(context, p, target);
+        }
+        return installFromAssets(context, p, target);
+    }
+
+    private static Outcome installFromAssets(Context context, Progress p, EngineType target) {
         AssetManager am = context.getAssets();
         File base = RootlessPaths.base(context);
         try {
             stage(p, Stage.PREPARING);
             if (!base.exists() && !base.mkdirs()) {
                 log(p, 3, "Cannot create " + base.getAbsolutePath());
-                return false;
+                return Outcome.FAILED;
             }
-
-            stage(p, Stage.EXTRACTING_QEMU);
-            copyAsset(am, ASSET_DIR + "/qemu-system-aarch64", RootlessPaths.qemuBin(context), p, "QEMU");
-            RootlessPaths.qemuBin(context).setExecutable(true, false);
 
             stage(p, Stage.EXTRACTING_KERNEL);
             copyAsset(am, ASSET_DIR + "/Image", RootlessPaths.kernel(context), p, "kernel");
             copyAsset(am, ASSET_DIR + "/initrd.img", RootlessPaths.initrd(context), p, "initrd");
 
-            stage(p, Stage.EXTRACTING_LIBS);
-            copyAsset(am, ASSET_DIR + "/libslirp.so", RootlessPaths.libslirp(context), p, "libslirp.so");
-
             stage(p, Stage.DECOMPRESSING_ROOTFS);
+            if (RootlessPaths.rootfs(context).isFile()) {
+                log(p, 1, "Debian image already present — keeping it");
+                stage(p, Stage.FINALIZING);
+                ensureMinimumDisk(context, p);
+                return verify(context, p, target);
+            }
             String rootfsAsset = rootfsAssetName(context);
             if (rootfsAsset == null) {
                 log(p, 3, "rootfs asset not found in assets/rootless");
-                return false;
+                return Outcome.FAILED;
             }
             if (isCompressed(rootfsAsset)) {
                 log(p, 1, "Decompressing " + rootfsAsset + " (this can take a minute)");
@@ -123,83 +132,115 @@ public final class QemuInstaller {
 
             stage(p, Stage.FINALIZING);
             ensureMinimumDisk(context, p);
-            boolean ok = RootlessEngine.get(context).isInstalled();
-            if (ok) {
-                stage(p, Stage.DONE);
-                log(p, 2, "Rootless engine installed");
-            } else {
-                log(p, 3, "Post-install verification failed");
-            }
-            return ok;
+            return verify(context, p, target);
         } catch (Exception e) {
-            Log.e(TAG, "install failed", e);
+            StrykerLog.e(TAG, "install failed", e);
             log(p, 3, "Install error: " + e.getMessage());
-            return false;
+            return Outcome.FAILED;
         }
     }
 
-    private static boolean installFromNetwork(Context context, Progress p) {
+    private static Outcome verify(Context context, Progress p, EngineType target) {
+        GuestEngine engine = Engines.active(context, target);
+        if (engine.isInstalled()) {
+            stage(p, Stage.DONE);
+            log(p, 2, engine.displayName() + " installed");
+            return Outcome.OK;
+        }
+        log(p, 3, "Post-install check failed, missing: "
+                + android.text.TextUtils.join(", ", engine.missing()));
+        return Outcome.FAILED;
+    }
+
+    private static Outcome installFromNetwork(Context context, Progress p, EngineType target) {
         File base = RootlessPaths.base(context);
         try {
             stage(p, Stage.PREPARING);
             if (!base.exists() && !base.mkdirs()) {
                 log(p, 3, "Cannot create " + base.getAbsolutePath());
-                return false;
+                return Outcome.FAILED;
             }
             QemuDownloader.Bundle b = QemuDownloader.resolve(context);
 
-            stage(p, Stage.EXTRACTING_QEMU);
-            if (!fetch(b.qemu, RootlessPaths.qemuBin(context), "QEMU", p)) return false;
-            RootlessPaths.qemuBin(context).setExecutable(true, false);
+            boolean needsQemu = target != EngineType.UML;
 
-            stage(p, Stage.EXTRACTING_KERNEL);
-            if (!fetch(b.kernel, RootlessPaths.kernel(context), "kernel", p)) return false;
-            if (!fetch(b.initrd, RootlessPaths.initrd(context), "initrd", p)) return false;
-
-            stage(p, Stage.EXTRACTING_LIBS);
-            if (!fetch(b.libslirp, RootlessPaths.libslirp(context), "libslirp.so", p)) return false;
+            if (needsQemu) {
+                stage(p, Stage.EXTRACTING_KERNEL);
+                String err = fetch(b.kernel, RootlessPaths.kernel(context), "kernel", p);
+                if (err == null) err = fetch(b.initrd, RootlessPaths.initrd(context), "initrd", p);
+                if (err != null) return classify(context, err);
+            } else {
+                log(p, 1, "UML engine: the kernel ships in the app, only the disk image is needed");
+            }
 
             stage(p, Stage.DECOMPRESSING_ROOTFS);
             File rootfs = RootlessPaths.rootfs(context);
+            if (rootfs.isFile()) {
+                log(p, 1, "Debian image already present — keeping it");
+                stage(p, Stage.FINALIZING);
+                ensureMinimumDisk(context, p);
+                return verify(context, p, target);
+            }
             boolean compressed = b.rootfs != null && b.rootfs.url != null
                     && (b.rootfs.url.endsWith(".imgz") || b.rootfs.url.endsWith(".gz"));
             if (!compressed) {
-                if (!fetch(b.rootfs, rootfs, "rootfs.img", p)) return false;
+                String err = fetch(b.rootfs, rootfs, "rootfs.img", p);
+                if (err != null) return classify(context, err);
             } else {
                 File archive = new File(base, "rootfs.download");
-                if (!fetch(b.rootfs, archive, "rootfs", p)) return false;
+                String err = fetch(b.rootfs, archive, "rootfs", p);
+                if (err != null) return classify(context, err);
                 log(p, 1, "Decompressing rootfs (this can take a minute)");
                 if (!gunzipFile(archive, rootfs, p)) {
-                    //noinspection ResultOfMethodCallIgnored
                     archive.delete();
-                    return false;
+                    return Outcome.FAILED;
                 }
-                //noinspection ResultOfMethodCallIgnored
                 archive.delete();
             }
 
             stage(p, Stage.FINALIZING);
             ensureMinimumDisk(context, p);
-            boolean ok = RootlessEngine.get(context).isInstalled();
-            if (ok) {
-                stage(p, Stage.DONE);
-                log(p, 2, "Rootless engine installed");
-            } else {
-                log(p, 3, "Post-install verification failed");
-            }
-            return ok;
+            return verify(context, p, target);
         } catch (Exception e) {
-            Log.e(TAG, "network install failed", e);
+            StrykerLog.e(TAG, "network install failed", e);
             log(p, 3, "Install error: " + e.getMessage());
-            return false;
+            return classify(context, e.getMessage());
         }
     }
 
-    private static boolean fetch(com.zalexdev.stryker.ota.RemoteManifest.Asset asset, File dest,
-                                 String label, Progress p) {
+    private static Outcome classify(Context context, String error) {
+        if (!hasInternet(context)) return Outcome.OFFLINE;
+        String e = error == null ? "" : error.toLowerCase(java.util.Locale.ROOT);
+        if (e.contains("unable to resolve host") || e.contains("no address associated")
+                || e.contains("unknownhost") || e.contains("network is unreachable")
+                || e.contains("failed to connect") || e.contains("connection reset")
+                || e.contains("timeout") || e.contains("timed out")) {
+            return Outcome.OFFLINE;
+        }
+        return Outcome.FAILED;
+    }
+
+    private static boolean hasInternet(Context context) {
+        try {
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager)
+                    context.getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm == null) return true;
+            android.net.Network net = cm.getActiveNetwork();
+            android.net.NetworkCapabilities caps =
+                    net == null ? null : cm.getNetworkCapabilities(net);
+            return caps != null && caps.hasCapability(
+                    android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET);
+        } catch (Throwable t) {
+            return true;
+        }
+    }
+
+    private static String fetch(com.zalexdev.stryker.ota.RemoteManifest.Asset asset, File dest,
+                                String label, Progress p) {
         if (asset == null || !asset.isUsable()) {
-            log(p, 3, label + ": no download URL in the manifest");
-            return false;
+            String why = "no download URL in the manifest";
+            log(p, 3, label + ": " + why);
+            return why;
         }
         log(p, 1, "GET " + asset.url);
         com.zalexdev.stryker.ota.VerifiedDownloader.Result r =
@@ -208,13 +249,13 @@ public final class QemuInstaller {
                         (done, total) -> { if (p != null) p.onBytes(label, done); });
         if (!r.ok) {
             log(p, 3, label + ": " + r.error);
-            return false;
+            return r.error == null ? "download failed" : r.error;
         }
         if (asset.sha256 == null || asset.sha256.isEmpty()) {
             log(p, 3, label + " downloaded but the manifest carries no checksum");
         }
         log(p, 2, label + " ready (" + mb(dest.length()) + ")");
-        return true;
+        return null;
     }
 
     private static boolean gunzipFile(File src, File dest, Progress p) {
@@ -236,12 +277,10 @@ public final class QemuInstaller {
             out.flush();
         } catch (IOException e) {
             log(p, 3, "Decompression failed: " + e.getMessage());
-            //noinspection ResultOfMethodCallIgnored
             tmp.delete();
             return false;
         }
         if (!tmp.renameTo(dest)) {
-            //noinspection ResultOfMethodCallIgnored
             dest.delete();
             if (!tmp.renameTo(dest)) {
                 log(p, 3, "rename failed for " + dest);
@@ -296,7 +335,6 @@ public final class QemuInstaller {
             out.flush();
         }
         if (!tmp.renameTo(dest)) {
-            //noinspection ResultOfMethodCallIgnored
             dest.delete();
             if (!tmp.renameTo(dest)) throw new IOException("rename failed for " + dest);
         }
@@ -324,7 +362,6 @@ public final class QemuInstaller {
             out.flush();
         }
         if (!tmp.renameTo(dest)) {
-            //noinspection ResultOfMethodCallIgnored
             dest.delete();
             if (!tmp.renameTo(dest)) throw new IOException("rename failed for " + dest);
         }

@@ -1,11 +1,11 @@
 package com.zalexdev.stryker.netdetect;
 
-import android.util.Log;
 
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import com.stryker.terminal.bridge.StrykerLog;
 
 final class SysfsReader {
 
@@ -20,7 +20,7 @@ final class SysfsReader {
             String line = r.readLine();
             return line == null ? null : line.trim();
         } catch (IOException e) {
-            Log.v(TAG, "readText failed: " + path + " — " + e.getMessage());
+            StrykerLog.v(TAG, "readText failed: " + path + " — " + e.getMessage());
             return null;
         }
     }

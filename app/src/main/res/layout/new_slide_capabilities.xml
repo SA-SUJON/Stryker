@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    style="@style/IntroContent">
+
+    <com.airbnb.lottie.LottieAnimationView
+        android:id="@+id/caps_gears"
+        android:tag="intro_autoplay"
+        android:layout_width="67dp"
+        android:layout_height="67dp"
+        android:paddingBottom="5dp"
+        android:layout_marginBottom="4dp"
+        app:lottie_colorFilter="@color/intro_text"
+        app:lottie_loop="true"
+        app:lottie_rawRes="@raw/settings_gears" />
+
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/caps_eyebrow"
+        style="@style/IntroEyebrow"
+        android:text="@string/intro_eyebrow_autosetup" />
+
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/verdict_title"
+        style="@style/IntroTitle"
+        android:text="@string/intro_caps_title" />
+
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/scan_status"
+        style="@style/IntroSubtitle"
+        android:text="@string/setup_caps_starting" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/skip_detection"
+        style="@style/IntroGhostButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="@string/setup_caps_skip" />
+</LinearLayout>

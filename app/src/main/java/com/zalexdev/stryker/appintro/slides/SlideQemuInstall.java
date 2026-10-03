@@ -8,7 +8,6 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
@@ -25,18 +24,27 @@ import com.google.android.material.button.MaterialButton;
 import com.google.android.material.progressindicator.LinearProgressIndicator;
 import com.zalexdev.stryker.BuildConfig;
 import com.zalexdev.stryker.R;
+import com.zalexdev.stryker.appintro.install.InstallLogDialog;
 import com.zalexdev.stryker.appintro.install.LogAdapter;
 import com.zalexdev.stryker.appintro.install.LogLevel;
 import com.zalexdev.stryker.appintro.install.LogLine;
+import com.zalexdev.stryker.appintro.AppIntroActivity;
+import com.zalexdev.stryker.appintro.IntroPage;
+import com.zalexdev.stryker.engine.DeviceCapabilities;
+import com.zalexdev.stryker.engine.EngineType;
+import com.zalexdev.stryker.engine.Engines;
+import com.zalexdev.stryker.engine.GuestEngine;
 import com.zalexdev.stryker.engine.QemuInstaller;
 import com.zalexdev.stryker.engine.RootlessEngine;
 import com.zalexdev.stryker.engine.VmSpecs;
 import com.zalexdev.stryker.utils.Core;
 
-import java.util.EnumMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-public class SlideQemuInstall extends Fragment {
+public class SlideQemuInstall extends Fragment implements IntroPage {
 
     private Activity activity;
     private Context context;
@@ -48,24 +56,21 @@ public class SlideQemuInstall extends Fragment {
     private ImageView statusIcon;
     private ProgressBar statusSpinner;
 
-    private LinearLayout downloadBlock;
     private LinearProgressIndicator progress;
     private TextView downloadText;
 
-    private TextView stagesHeader;
-    private LinearLayout stagesContainer;
-    private View stagesCard;
-
-    private TextView logHeader;
-    private View logCard;
-    private RecyclerView logRecycler;
     private LogAdapter logAdapter;
-
-    private MaterialButton installButton;
-
-    private final EnumMap<QemuInstaller.Stage, StageRow> stageRows = new EnumMap<>(QemuInstaller.Stage.class);
+    private MaterialButton detailsToggle;
+    private com.airbnb.lottie.LottieAnimationView working;
+    private InstallLogDialog logDialog;
 
     private boolean started = false;
+    private boolean failed = false;
+
+    private boolean offline = false;
+
+    private boolean replacePayload = false;
+    private boolean wiped = false;
 
     @Nullable
     @Override
@@ -75,111 +80,389 @@ public class SlideQemuInstall extends Fragment {
         context = getContext();
         core = new Core(context);
         mPager = activity.findViewById(R.id.view_pager);
+        replacePayload = activity instanceof AppIntroActivity
+                && ((AppIntroActivity) activity).replacesPayload();
 
         statusTitle = view.findViewById(R.id.status_title);
         statusSubtitle = view.findViewById(R.id.status_subtitle);
         statusIcon = view.findViewById(R.id.status_icon);
         statusSpinner = view.findViewById(R.id.status_spinner);
 
-        downloadBlock = view.findViewById(R.id.download_block);
         progress = view.findViewById(R.id.slide_install_progress);
         downloadText = view.findViewById(R.id.download_text);
 
-        stagesHeader = view.findViewById(R.id.stages_header);
-        stagesContainer = view.findViewById(R.id.stages_container);
-        stagesCard = view.findViewById(R.id.stages_card);
-
-        logHeader = view.findViewById(R.id.log_header);
-        logCard = view.findViewById(R.id.log_card);
-        logRecycler = view.findViewById(R.id.log_recycler);
-        logRecycler.setLayoutManager(new LinearLayoutManager(context));
         logAdapter = new LogAdapter(context);
-        logRecycler.setAdapter(logAdapter);
-
-        installButton = view.findViewById(R.id.login);
-
-        buildStageRows(inflater);
-
-        installButton.setOnClickListener(v -> startInstall());
+        working = view.findViewById(R.id.install_working);
+        com.zalexdev.stryker.appintro.IntroLayout.centerOn(
+                working, view.findViewById(R.id.install_eyebrow));
+        detailsToggle = view.findViewById(R.id.install_details_toggle);
+        detailsToggle.setOnClickListener(v -> showLog());
         return view;
     }
 
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (!started) startInstall();
+    }
+
+    @Override
+    public void onDestroyView() {
+        if (logDialog != null) logDialog.dismiss();
+        logDialog = null;
+        super.onDestroyView();
+    }
+
+
+    private static final long BOOT_DEADLINE_MS = 200_000;
+
+    private static final long READY_CONFIRM_MS = 20_000;
+
+    private static final long STOP_GRACE_MS = 15_000;
+
     private void startInstall() {
         started = true;
-        installButton.setVisibility(View.INVISIBLE);
-        stagesHeader.setVisibility(View.VISIBLE);
-        stagesContainer.setVisibility(View.VISIBLE);
-        stagesCard.setVisibility(View.VISIBLE);
-        logHeader.setVisibility(View.VISIBLE);
-        logCard.setVisibility(View.VISIBLE);
-        logRecycler.setVisibility(View.VISIBLE);
-        setStatus(StatusKind.RUNNING, "Rootless engine", "Starting...");
+        failed = false;
+        offline = false;
+        refreshChrome();
         log(LogLevel.INFO, "Stryker " + BuildConfig.VERSION_NAME + " · build " + BuildConfig.VERSION_CODE);
-        log(LogLevel.INFO, "Engine: rootless (QEMU aarch64)");
 
         runOnUi(() -> {
-            downloadBlock.setVisibility(View.VISIBLE);
             progress.setVisibility(View.VISIBLE);
             progress.setIndeterminate(true);
         });
 
-        new Thread(() -> {
-            if (QemuInstaller.assetsPresent(context)) {
-                log(LogLevel.INFO, "Artifacts bundled in the APK — installing offline");
-            } else {
-                log(LogLevel.INFO, "Artifacts not bundled — downloading (~550 MB)");
-            }
+        new Thread(this::runPlan, "engine-install").start();
+    }
 
-            boolean ok = QemuInstaller.install(context, new QemuInstaller.Progress() {
-                @Override public void onStage(QemuInstaller.Stage stage) { advanceTo(stage); }
-                @Override public void onBytes(String label, long done) {
-                    runOnUi(() -> downloadText.setText(label + " · " + formatMb(done)));
-                }
-                @Override public void onLog(int level, String message) {
-                    log(mapLevel(level), message);
-                }
-            });
+    private void showLog() {
+        if (logDialog != null && logDialog.isShowing()) return;
+        logDialog = InstallLogDialog.show(context, logAdapter);
+    }
 
-            if (!ok) {
-                failWith("Extraction failed — see log");
+    private void closeLog() {
+        if (logDialog != null) logDialog.dismiss();
+        logDialog = null;
+    }
+
+    private void refreshChrome() {
+        if (getActivity() instanceof AppIntroActivity) {
+            ((AppIntroActivity) getActivity()).refreshPrimary();
+        }
+    }
+
+    private void runPlan() {
+        dropStalePayload();
+        List<EngineType> plan = installPlan();
+        if (plan.isEmpty()) {
+            allFailed();
+            return;
+        }
+        log(LogLevel.INFO, "Plan: " + planNames(plan)
+                + " · an engine counts as working only once the guest answers over SSH");
+        for (int i = 0; i < plan.size(); i++) {
+            EngineType candidate = plan.get(i);
+            if (i > 0) announceFallback(plan.get(i - 1), candidate);
+            Attempt result = attempt(candidate);
+            if (result == Attempt.BOOTED) {
+                succeed(candidate);
                 return;
             }
-            runOnUi(() -> downloadBlock.setVisibility(View.GONE));
-
-            seedDefaults();
-            log(LogLevel.SUCCESS, "Defaults written (wlan0, "
-                    + core.getInt("rootless_cpus", VmSpecs.DEFAULT_CPUS) + " vCPU, "
-                    + core.getInt("rootless_ram", VmSpecs.DEFAULT_RAM_MB) + " MB)");
-
-            setStatus(StatusKind.RUNNING, "Rootless engine", "Booting VM (first boot is slow)...");
-            log(LogLevel.STEP, "Booting QEMU VM for the first time");
-            boolean booted = RootlessEngine.get(context).startBlocking(new RootlessEngine.BootListener() {
-                @Override public void onBootLine(String line) {
-                    if (line != null && (line.contains("stryker") || line.contains("login")
-                            || line.contains("Kernel panic") || line.contains("error"))) {
-                        log(LogLevel.INFO, line);
-                    }
-                }
-                @Override public void onBooted() { log(LogLevel.SUCCESS, "Guest is up"); }
-                @Override public void onFailed(String reason) { log(LogLevel.WARN, "Boot: " + reason); }
-            });
-
-            if (booted) {
-                log(LogLevel.SUCCESS, "Rootless engine ready");
-                log(LogLevel.STEP, "Deploying built-in scripts (CORE, exploits)");
-                boolean coreOk = RootlessEngine.get(context).ensureGuestCore();
-                log(coreOk ? LogLevel.SUCCESS : LogLevel.WARN,
-                        coreOk ? "Scripts deployed to the guest" : "Scripts deploy deferred to first use");
-            } else {
-                log(LogLevel.WARN, "VM did not report ready — it will retry on first use");
+            if (result == Attempt.OFFLINE) {
+                noNetwork();
+                return;
             }
+        }
+        allFailed();
+    }
 
-            setStatus(StatusKind.SUCCESS, "Rootless engine", "Installation complete — moving on...");
-            runOnUi(() -> {
-                progress.setVisibility(View.INVISIBLE);
-                core.moveNext(mPager);
-            });
-        }).start();
+    private void dropStalePayload() {
+        if (!replacePayload || wiped) return;
+        wiped = true;
+        setStatus(StatusKind.RUNNING, context.getString(R.string.setup_update_title),
+                context.getString(R.string.setup_update_body));
+        log(LogLevel.STEP, context.getString(R.string.setup_update_body));
+        Engines.stopAll(context);
+        long freed = com.zalexdev.stryker.engine.EnginePayload.wipe(context);
+        if (freed > 0) {
+            log(LogLevel.INFO, context.getString(R.string.setup_update_freed, formatMb(freed)));
+        }
+    }
+
+    private String planNames(List<EngineType> plan) {
+        StringBuilder sb = new StringBuilder();
+        for (EngineType t : plan) {
+            if (sb.length() > 0) sb.append(" → ");
+            sb.append(Engines.active(context, t).displayName());
+        }
+        return sb.toString();
+    }
+
+    private EngineType leadEngine(EngineType recorded) {
+        if (!replacePayload || recorded != EngineType.ROOTLESS) return recorded;
+        if (!EngineType.rootlessSupported(context)) return recorded;
+
+        String umlName = Engines.active(context, EngineType.UML).displayName();
+        setStatus(StatusKind.RUNNING, context.getString(R.string.setup_caps_title),
+                context.getString(R.string.setup_caps_running, umlName));
+        log(LogLevel.STEP, "This install picked the virtual machine before " + umlName
+                + " existed — testing it first");
+
+        com.zalexdev.stryker.engine.UmlProbe.Result probe =
+                com.zalexdev.stryker.engine.UmlProbe.run(context);
+        DeviceCapabilities.rememberUmlNotes(core, probe);
+        if (probe.ruledOut()) {
+            log(LogLevel.INFO, umlName + " will not run here: " + probe.detail
+                    + " — staying on the virtual machine");
+            return recorded;
+        }
+        log(LogLevel.SUCCESS, umlName + ": " + probe.detail
+                + " — it boots faster, and the virtual machine stays as the fallback");
+        return EngineType.UML;
+    }
+
+    private List<EngineType> installPlan() {
+        EngineType chosen = leadEngine(EngineType.active(core));
+        List<EngineType> detected = DeviceCapabilities.plan(core);
+        List<EngineType> plan = new ArrayList<>();
+
+        if (chosen != EngineType.CHROOT) plan.add(chosen);
+        for (EngineType t : detected) {
+            if (t != EngineType.CHROOT && !plan.contains(t)) plan.add(t);
+        }
+
+        if (detected.isEmpty()) {
+            if (plan.isEmpty()) plan.add(EngineType.UML);
+            EngineType other =
+                    plan.get(0) == EngineType.UML ? EngineType.ROOTLESS : EngineType.UML;
+            if (!plan.contains(other)) plan.add(other);
+        }
+        return plan;
+    }
+
+    private enum Attempt { BOOTED, FAILED, OFFLINE }
+
+    private Attempt attempt(EngineType candidate) {
+        GuestEngine engine = Engines.active(context, candidate);
+
+        EngineType.persist(core, candidate);
+
+        runOnUi(() -> {
+            progress.setVisibility(View.VISIBLE);
+            progress.setIndeterminate(true);
+        });
+        setStatus(StatusKind.RUNNING, engine.displayName(), "Installing…");
+        log(LogLevel.STEP, "Installing " + engine.displayName());
+        log(LogLevel.INFO, QemuInstaller.assetsPresent(context)
+                ? "Artifacts bundled in the APK — installing offline"
+                : "Artifacts not bundled — downloading (~500 MB)");
+
+        QemuInstaller.Outcome installed = QemuInstaller.install(context, installProgress(), candidate);
+        if (installed == QemuInstaller.Outcome.OFFLINE) {
+            log(LogLevel.ERROR, engine.displayName() + ": nothing downloaded — the phone is offline");
+            return Attempt.OFFLINE;
+        }
+        if (installed != QemuInstaller.Outcome.OK) {
+            log(LogLevel.ERROR, engine.displayName() + ": install failed — see log");
+            return Attempt.FAILED;
+        }
+        prefetchFallback(candidate);
+
+        seedDefaults();
+        log(LogLevel.SUCCESS, "Defaults written (wlan0, "
+                + core.getInt("rootless_cpus", VmSpecs.DEFAULT_CPUS) + " vCPU, "
+                + core.getInt("rootless_ram", VmSpecs.DEFAULT_RAM_MB) + " MB)");
+
+        runOnUi(() -> downloadText.setText(""));
+        setStatus(StatusKind.RUNNING, engine.displayName(), "Booting — the first boot is slow");
+        log(LogLevel.STEP, "Booting " + engine.displayName()
+                + " for the first time · waiting for the guest's SSH");
+        if (candidate == EngineType.UML) logUmlProbeNotes();
+        return bootWithDeadline(engine) ? Attempt.BOOTED : Attempt.FAILED;
+    }
+
+    private void logUmlProbeNotes() {
+        List<String> notes = DeviceCapabilities.umlNotes(core);
+        if (notes.isEmpty()) return;
+        log(LogLevel.INFO, "Kernel probe said:");
+        for (String note : notes) log(LogLevel.INFO, "  " + note);
+    }
+
+    private void prefetchFallback(EngineType candidate) {
+        if (candidate != EngineType.UML || !EngineType.rootlessSupported(context)) return;
+        if (Engines.active(context, EngineType.ROOTLESS).isInstalled()) return;
+
+        log(LogLevel.STEP, "Fetching the virtual machine as a fallback");
+        boolean ok = QemuInstaller.install(context, installProgress(), EngineType.ROOTLESS).ok();
+        log(ok ? LogLevel.SUCCESS : LogLevel.WARN, ok
+                ? "Fallback engine ready if this one will not boot"
+                : "Fallback engine could not be fetched — it will be downloaded only if needed");
+    }
+
+    private QemuInstaller.Progress installProgress() {
+        return new QemuInstaller.Progress() {
+            @Override public void onStage(QemuInstaller.Stage stage) {
+                runOnUi(() -> statusSubtitle.setText(stage.title));
+            }
+            @Override public void onBytes(String label, long done) {
+                runOnUi(() -> downloadText.setText(label + " · " + formatMb(done)));
+            }
+            @Override public void onLog(int level, String message) { log(mapLevel(level), message); }
+        };
+    }
+
+    private boolean bootWithDeadline(GuestEngine engine) {
+        AtomicBoolean booted = new AtomicBoolean(false);
+        Thread boot = new Thread(() -> booted.set(engine.startBlocking(bootListener())),
+                "engine-boot");
+        boot.setDaemon(true);
+        boot.start();
+        try {
+            boot.join(BOOT_DEADLINE_MS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        if (boot.isAlive()) {
+            log(LogLevel.ERROR, engine.displayName() + " did not finish booting within "
+                    + (BOOT_DEADLINE_MS / 1000) + "s");
+            forceStop(engine);
+            return false;
+        }
+        if (!booted.get()) {
+            String why = engine.lastError();
+            log(LogLevel.ERROR, engine.displayName() + " did not boot"
+                    + (why == null || why.isEmpty() ? "" : ": " + why));
+            forceStop(engine);
+            return false;
+        }
+        if (!confirmReady(engine)) {
+            log(LogLevel.ERROR, engine.displayName()
+                    + " started but the guest does not stay reachable over SSH");
+            forceStop(engine);
+            return false;
+        }
+        return true;
+    }
+
+    private static final int READY_CONFIRMATIONS = 2;
+    private static final long READY_GAP_MS = 4_000;
+
+    private boolean confirmReady(GuestEngine engine) {
+        long deadline = System.currentTimeMillis() + READY_CONFIRM_MS;
+        int seen = 0;
+        long nextAt = 0;
+        while (System.currentTimeMillis() < deadline) {
+            if (System.currentTimeMillis() >= nextAt && engine.isReady()) {
+                if (++seen >= READY_CONFIRMATIONS) return true;
+                log(LogLevel.INFO, "Guest answered over SSH (" + seen + "/"
+                        + READY_CONFIRMATIONS + ") — confirming it stays up");
+                nextAt = System.currentTimeMillis() + READY_GAP_MS;
+            }
+            if (!engine.isRunning()) return false;
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private void forceStop(GuestEngine engine) {
+        Thread stopper = new Thread(() -> {
+            try {
+                engine.stop();
+            } catch (Throwable ignored) {
+            }
+        }, "engine-stop");
+        stopper.setDaemon(true);
+        stopper.start();
+
+        long deadline = System.currentTimeMillis() + STOP_GRACE_MS;
+        while (System.currentTimeMillis() < deadline) {
+            if (!engine.isRunning()) return;
+            try {
+                Thread.sleep(250);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+        log(LogLevel.WARN, engine.displayName()
+                + " would not shut down — the next engine may find its ports taken");
+    }
+
+    private GuestEngine.BootListener bootListener() {
+        return new GuestEngine.BootListener() {
+            @Override public void onBootLine(String line) {
+                if (line != null && (line.contains("stryker") || line.contains("login")
+                        || line.contains("Kernel panic") || line.contains("error"))) {
+                    log(LogLevel.INFO, line);
+                }
+            }
+            @Override public void onBooted() { log(LogLevel.SUCCESS, "Guest is up"); }
+            @Override public void onFailed(String reason) { log(LogLevel.WARN, "Boot: " + reason); }
+        };
+    }
+
+    private void announceFallback(EngineType failed, EngineType next) {
+        String from = Engines.active(context, failed).displayName();
+        String to = Engines.active(context, next).displayName();
+        log(LogLevel.WARN, context.getString(R.string.setup_install_fallback, from, to));
+        setStatus(StatusKind.RUNNING, context.getString(R.string.setup_install_fallback_title),
+                context.getString(R.string.setup_install_fallback, from, to));
+    }
+
+    private void succeed(EngineType engineType) {
+        GuestEngine engine = Engines.active(context, engineType);
+        log(LogLevel.SUCCESS, engine.displayName() + " ready");
+        log(LogLevel.STEP, "Deploying built-in scripts (CORE, exploits)");
+        boolean coreOk = RootlessEngine.get(context).ensureGuestCore();
+        log(coreOk ? LogLevel.SUCCESS : LogLevel.WARN,
+                coreOk ? "Scripts deployed to the guest" : "Scripts deploy deferred to first use");
+
+        EngineType.persist(core, engineType);
+        core.putBoolean(EngineType.PREF_VERIFIED, true);
+        core.putBoolean(EngineType.PREF_FORCED, false);
+        com.zalexdev.stryker.engine.EnginePayload.mark(core);
+
+        setStatus(StatusKind.SUCCESS, engine.displayName(), "Done — moving on");
+        runOnUi(() -> {
+            closeLog();
+            progress.setVisibility(View.INVISIBLE);
+            core.moveNext(mPager);
+        });
+    }
+
+    private void allFailed() {
+        core.putBoolean(EngineType.PREF_VERIFIED, false);
+        setStatus(StatusKind.FAILED, context.getString(R.string.setup_install_all_failed_title),
+                context.getString(R.string.setup_install_all_failed_body));
+        log(LogLevel.ERROR, context.getString(R.string.setup_install_all_failed_body));
+        runOnUi(() -> {
+            progress.setIndeterminate(false);
+            progress.setVisibility(View.INVISIBLE);
+            failed = true;
+            started = false;
+            showLog();
+            refreshChrome();
+        });
+    }
+
+    private void noNetwork() {
+        setStatus(StatusKind.FAILED, context.getString(R.string.setup_install_offline_title),
+                context.getString(R.string.setup_install_offline_body));
+        log(LogLevel.ERROR, context.getString(R.string.setup_install_offline_body));
+        runOnUi(() -> {
+            progress.setIndeterminate(false);
+            progress.setVisibility(View.INVISIBLE);
+            offline = true;
+            failed = true;
+            started = false;
+            refreshChrome();
+        });
     }
 
     private void seedDefaults() {
@@ -191,18 +474,6 @@ public class SlideQemuInstall extends Fragment {
             core.putInt("rootless_ram", VmSpecs.recommendedRamMb(context));
         if (core.getInt("rootless_cpus", 0) <= 0)
             core.putInt("rootless_cpus", VmSpecs.recommendedCpus());
-    }
-
-    private void failWith(String reason) {
-        setStatus(StatusKind.FAILED, "Rootless engine", reason);
-        log(LogLevel.ERROR, reason);
-        runOnUi(() -> {
-            progress.setIndeterminate(false);
-            downloadBlock.setVisibility(View.GONE);
-            installButton.setText(R.string.try_again);
-            installButton.setVisibility(View.VISIBLE);
-            started = false;
-        });
     }
 
     private static String formatMb(long bytes) {
@@ -226,7 +497,7 @@ public class SlideQemuInstall extends Fragment {
     private void log(LogLevel level, String text) {
         runOnUi(() -> {
             logAdapter.append(new LogLine(level, text));
-            if (logAdapter.size() > 0) logRecycler.scrollToPosition(logAdapter.size() - 1);
+            if (logDialog != null && logDialog.isShowing()) logDialog.scrollToEnd();
         });
     }
 
@@ -237,6 +508,12 @@ public class SlideQemuInstall extends Fragment {
         runOnUi(() -> {
             statusTitle.setText(title);
             statusSubtitle.setText(subtitle);
+            if (working != null) {
+                boolean busy = kind == StatusKind.RUNNING;
+                working.setVisibility(busy ? View.VISIBLE : View.GONE);
+                if (busy) working.playAnimation(); else working.cancelAnimation();
+            }
+            if (logDialog != null && logDialog.isShowing()) logDialog.setState(subtitle);
             switch (kind) {
                 case SUCCESS:
                     statusSpinner.setVisibility(View.GONE);
@@ -260,93 +537,25 @@ public class SlideQemuInstall extends Fragment {
         });
     }
 
-    private enum RowState { PENDING, ACTIVE, DONE, FAILED }
-
-    private void buildStageRows(LayoutInflater inflater) {
-        stagesContainer.removeAllViews();
-        stageRows.clear();
-        for (QemuInstaller.Stage stage : QemuInstaller.Stage.values()) {
-            View row = inflater.inflate(R.layout.install_stage_row, stagesContainer, false);
-            TextView title = row.findViewById(R.id.stage_title);
-            ImageView icon = row.findViewById(R.id.stage_icon);
-            ProgressBar spinner = row.findViewById(R.id.stage_spinner);
-            FrameLayout indicator = row.findViewById(R.id.stage_indicator);
-            title.setText(stage.title);
-            StageRow handles = new StageRow(title, icon, spinner, indicator);
-            applyRowState(handles, RowState.PENDING);
-            stageRows.put(stage, handles);
-            stagesContainer.addView(row);
-        }
+    @Override
+    public boolean primaryVisible() {
+        return failed;
     }
 
-    private void advanceTo(QemuInstaller.Stage current) {
-        runOnUi(() -> {
-            boolean reachedCurrent = false;
-            for (QemuInstaller.Stage s : QemuInstaller.Stage.values()) {
-                StageRow row = stageRows.get(s);
-                if (row == null) continue;
-                if (s == current) {
-                    reachedCurrent = true;
-                    applyRowState(row, current == QemuInstaller.Stage.DONE ? RowState.DONE : RowState.ACTIVE);
-                    statusSubtitle.setText(s.title);
-                } else if (!reachedCurrent) {
-                    applyRowState(row, RowState.DONE);
-                }
-            }
-        });
+    @Override
+    public CharSequence primaryLabel(Context context) {
+        return context.getString(offline
+                ? R.string.intro_action_retry : R.string.setup_install_manual);
     }
 
-    private void applyRowState(StageRow row, RowState state) {
-        int color;
-        switch (state) {
-            case ACTIVE:
-                color = ContextCompat.getColor(context, R.color.stryker_accent);
-                row.spinner.setVisibility(View.VISIBLE);
-                row.icon.setVisibility(View.GONE);
-                row.title.setTypeface(null, android.graphics.Typeface.BOLD);
-                break;
-            case DONE:
-                color = ContextCompat.getColor(context, R.color.green);
-                row.spinner.setVisibility(View.GONE);
-                row.icon.setVisibility(View.VISIBLE);
-                row.icon.setImageResource(R.drawable.done);
-                row.icon.setColorFilter(color, PorterDuff.Mode.SRC_IN);
-                row.title.setTypeface(null, android.graphics.Typeface.NORMAL);
-                break;
-            case FAILED:
-                color = ContextCompat.getColor(context, R.color.red);
-                row.spinner.setVisibility(View.GONE);
-                row.icon.setVisibility(View.VISIBLE);
-                row.icon.setImageResource(R.drawable.error);
-                row.icon.setColorFilter(color, PorterDuff.Mode.SRC_IN);
-                row.title.setTypeface(null, android.graphics.Typeface.BOLD);
-                break;
-            case PENDING:
-            default:
-                color = ContextCompat.getColor(context, R.color.grey);
-                row.spinner.setVisibility(View.GONE);
-                row.icon.setVisibility(View.GONE);
-                row.title.setTypeface(null, android.graphics.Typeface.NORMAL);
-                break;
+    @Override
+    public void onPrimary() {
+        if (offline) {
+            logAdapter.clear();
+            startInstall();
+            return;
         }
-        row.title.setTextColor(color);
-        if (row.indicator.getBackground() != null) {
-            row.indicator.getBackground().mutate().setColorFilter(color, PorterDuff.Mode.SRC_IN);
-            row.indicator.getBackground().setAlpha(60);
-        }
-    }
-
-    private static final class StageRow {
-        final TextView title;
-        final ImageView icon;
-        final ProgressBar spinner;
-        final FrameLayout indicator;
-
-        StageRow(TextView title, ImageView icon, ProgressBar spinner, FrameLayout indicator) {
-            this.title = title;
-            this.icon = icon;
-            this.spinner = spinner;
-            this.indicator = indicator;
-        }
+        core.putBoolean(EngineType.PREF_FORCED, true);
+        core.moveNext(mPager);
     }
 }

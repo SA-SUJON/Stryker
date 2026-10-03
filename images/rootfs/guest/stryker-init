@@ -1,0 +1,76 @@
+#!/bin/bash
+
+exec </dev/console >/dev/console 2>&1
+
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export HOME=/root
+export TERM=${TERM:-linux}
+
+mark() { printf 'STRYKER_BOOT %s\n' "$*"; }
+
+mount -t proc     proc     /proc     2>/dev/null
+mount -t sysfs    sysfs    /sys      2>/dev/null
+mount -t devtmpfs devtmpfs /dev      2>/dev/null
+mkdir -p /dev/pts /dev/shm 2>/dev/null
+mount -t devpts   devpts   /dev/pts  2>/dev/null
+mount -t tmpfs    tmpfs    /dev/shm  2>/dev/null
+mount -t tmpfs    tmpfs    /tmp      2>/dev/null
+mount -t tmpfs    tmpfs    /run      2>/dev/null
+mount -o remount,rw / 2>/dev/null
+hostname stryker 2>/dev/null
+mark mounted
+
+if ip link show vec0 >/dev/null 2>&1; then
+	ip addr add 10.0.2.15/24 dev vec0 2>/dev/null
+	ip link set vec0 up 2>/dev/null
+	ip route add default via 10.0.2.2 2>/dev/null
+	printf 'nameserver %s\n' "${STRYKER_DNS:-1.1.1.1}" > /etc/resolv.conf
+	mark network
+fi
+ip link set lo up 2>/dev/null
+
+share=$(sed -n 's/.*stryker\.share=\([^ ]*\).*/\1/p' /proc/cmdline 2>/dev/null)
+if [ -n "$share" ]; then
+	mkdir -p /host 2>/dev/null
+	if ! mount -t hostfs none /host -o "hostfs=$share" 2>/tmp/share-err.new &&
+	   ! mount -t hostfs none /host -o "$share" 2>/tmp/share-err.old; then
+		echo "stryker-init: cannot mount the share $share"
+		sed 's/^/  /' /tmp/share-err.new /tmp/share-err.old 2>/dev/null
+	else
+		mark share
+	fi
+fi
+
+/usr/local/sbin/stryker-guest-init
+
+mkdir -p /run/sshd 2>/dev/null
+if [ -x /usr/sbin/sshd ]; then
+	/usr/sbin/sshd -D -e &
+	sshd_pid=$!
+	mark sshd
+else
+	echo "stryker-init: no sshd in this image -- the app cannot reach the guest"
+	sshd_pid=
+fi
+
+mark ready
+
+power_off() {
+	sync
+	/sbin/halt -f >/dev/null 2>&1
+	/sbin/poweroff -f >/dev/null 2>&1
+	exit 0
+}
+trap power_off TERM INT
+
+if [ -s /host/cmd ]; then
+	echo "STRYKER_OUTPUT_BEGIN"
+	bash /host/cmd
+	echo "STRYKER_EXIT=$?"
+	power_off
+fi
+
+if [ -n "$sshd_pid" ]; then
+	wait "$sshd_pid"
+fi
+power_off

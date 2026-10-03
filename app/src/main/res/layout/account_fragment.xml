@@ -123,7 +123,7 @@
             android:layout_gravity="center"
             android:layout_margin="10dp"
             android:gravity="center"
-            android:text="Special thanks for: Nevod, Jb314, Max, Lukas, Mirivan, The Show Started and Stryker community"
+            android:id="@+id/account_thanks"
             android:textColor="@color/grey" />
 
         <TextView

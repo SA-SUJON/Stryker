@@ -16,9 +16,9 @@ import android.graphics.PorterDuffXfermode;
 import android.graphics.Rect;
 import android.graphics.drawable.Animatable;
 import android.graphics.drawable.Drawable;
-import android.util.Log;
 import android.view.Choreographer;
 import android.view.animation.DecelerateInterpolator;
+import com.stryker.terminal.bridge.StrykerLog;
 
 public class WaveDrawable extends Drawable implements Animatable, ValueAnimator.AnimatorUpdateListener {
 
@@ -303,7 +303,7 @@ public class WaveDrawable extends Drawable implements Animatable, ValueAnimator.
 
     private void updateMask(int width, int length, int height) {
         if (width <= 0 || length <= 0 || height <= 0) {
-            Log.w(TAG, "updateMask: size must > 0");
+            StrykerLog.w(TAG, "updateMask: size must > 0");
             mMask = null;
             return;
         }

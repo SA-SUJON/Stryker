@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="usb_empty_title">端口中没有设备</string>
+    <string name="usb_empty_body">请插入网卡。</string>
+    <string name="usb_rescan">重新扫描</string>
+
+    <string name="usb_stage_port">端口</string>
+    <string name="usb_stage_android">Android</string>
+    <string name="usb_stage_vm">虚拟机</string>
+    <string name="usb_stage_wlan">wlan</string>
+
+    <string name="usb_note_nodriver_title">Android 中没有驱动</string>
+    <string name="usb_note_nodriver_body">手机内核没有此芯片的模块，也无法添加。改在自带该模块的 Linux 客户机中运行 Wi-Fi。</string>
+    <string name="usb_note_setup_guest">设置客户机</string>
+
+    <string name="usb_note_nonetdev_title">驱动已绑定，但没有接口</string>
+    <string name="usb_note_nonetdev_body">%1$s 已绑定网卡，但始终没有启用接口 — 通常是找不到固件。</string>
+
+    <string name="usb_note_guestdown_title">客户机未运行</string>
+    <string name="usb_note_guestdown_body">必须先启动 %1$s，才能把网卡移交给它。</string>
+
+
+    <string name="usb_note_phoneholds_title">Android 正在使用此网卡</string>
+    <string name="usb_note_phoneholds_body">手机自带的 %1$s 驱动占用着它。Stryker 必须先从 Android 手中取走，%2$s 才能使用，而有些内核会拒绝 — 移交失败就是这个原因。</string>
+
+    <string name="usb_note_noguestdriver_title">客户机中没有驱动</string>
+    <string name="usb_note_noguestdriver_body">%1$s 没有此芯片的模块，因此没有接口启用。</string>
+    <string name="usb_note_search">如何安装</string>
+
+    <string name="usb_row_interface">接口</string>
+    <string name="usb_row_mac">MAC</string>
+    <string name="usb_row_driver">驱动</string>
+    <string name="usb_row_bus">总线</string>
+    <string name="usb_row_matched">匹配方式</string>
+    <string name="usb_monitor">监听</string>
+    <string name="usb_match_curated">精选库</string>
+    <string name="usb_match_legacy">旧库回退</string>
+    <string name="usb_match_unknown">不在数据库中</string>
+
+    <string name="usb_note_noperm_title">无 USB 权限</string>
+    <string name="usb_note_noperm_body">Android 未允许 Stryker 打开此网卡，因此无法移交给客户机。请再次请求并允许。</string>
+
+
+    <string name="usb_step_scanning">正在查看端口…</string>
+    <string name="usb_step_kernel">正在检查手机内核…</string>
+    <string name="usb_step_asking">正在向 Android 请求权限…</string>
+    <string name="usb_step_starting_guest">正在启动客户机…</string>
+    <string name="usb_step_handing">正在移交网卡…</string>
+    <string name="usb_step_waiting_driver">正在等待驱动…</string>
+    <string name="usb_note_ask_again">再次请求</string>
+    <string name="usb_note_retry">重试</string>
+    <string name="usb_note_handover_failed_title">移交被拒绝</string>
+    <string name="usb_note_handover_failed_body">%1$s 没有接受此网卡。具体原因请查看日志。</string>
+
+    <string name="usb_note_gone_title">网卡已移除</string>
+
+    <string name="usb_note_flow_failed_title">检查失败</string>
+
+</resources>

@@ -2,11 +2,11 @@ apply plugin: 'com.android.library'
 
 android {
   namespace 'io.terminal.bridge'
-  compileSdk 33
+  compileSdk 36
 
   defaultConfig {
     minSdk 24
-    targetSdk 28
+    targetSdk 36
     testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
   }
 

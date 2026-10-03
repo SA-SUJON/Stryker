@@ -222,6 +222,7 @@ public class InstallNuclei extends Fragment {
     }
 
     private void showFailed() {
+        markStage(NucleiInstallStage.VERIFY, RowState.FAILED);
         statusSpinner.setVisibility(View.GONE);
         statusIcon.setVisibility(View.VISIBLE);
         statusIcon.setImageResource(R.drawable.error);
@@ -261,15 +262,18 @@ public class InstallNuclei extends Fragment {
         } else if (marker.startsWith("Unpacking binary")) {
             markStage(NucleiInstallStage.DOWNLOAD, RowState.DONE);
             markStage(NucleiInstallStage.DEPLOY, RowState.ACTIVE);
-        } else if (marker.startsWith("Fetching template library")) {
+        } else if (marker.startsWith("Binary in place")) {
             markStage(NucleiInstallStage.DEPLOY, RowState.DONE);
+        } else if (marker.startsWith("Binary missing")) {
+            markStage(NucleiInstallStage.DEPLOY, RowState.FAILED);
+        } else if (marker.startsWith("Fetching template library")) {
             markStage(NucleiInstallStage.TEMPLATES, RowState.ACTIVE);
         } else if (marker.startsWith("Template library ready")) {
             markStage(NucleiInstallStage.TEMPLATES, RowState.DONE);
-        } else if (marker.startsWith("Template download failed")) {
+        } else if (marker.startsWith("Template download failed")
+                || marker.startsWith("Templates skipped")) {
             markStage(NucleiInstallStage.TEMPLATES, RowState.FAILED);
         } else if (marker.startsWith("Verify nuclei")) {
-            markStage(NucleiInstallStage.DEPLOY, RowState.DONE);
             markStage(NucleiInstallStage.VERIFY, RowState.ACTIVE);
         }
         updateSubtitle(marker);

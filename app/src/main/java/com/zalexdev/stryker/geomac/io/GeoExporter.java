@@ -1,6 +1,7 @@
 package com.zalexdev.stryker.geomac.io;
 
 import com.zalexdev.stryker.geomac.model.GeoPin;
+import com.zalexdev.stryker.utils.Core;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -19,14 +20,16 @@ import java.util.Locale;
 
 public final class GeoExporter {
 
-    public static final String DIR_PATH = "/sdcard/Stryker/geomac";
+    public static File dir(Core core) {
+        File dir = new File(core.getShareRoot(), "geomac");
+        dir.mkdirs();
+        return dir;
+    }
 
     private GeoExporter() {}
 
-    public static File exportJson(List<GeoPin> pins) throws IOException, JSONException {
-        File dir = new File(DIR_PATH);
-        dir.mkdirs();
-        File out = new File(dir, "export-" + ts() + ".json");
+    public static File exportJson(Core core, List<GeoPin> pins) throws IOException, JSONException {
+        File out = new File(dir(core), "export-" + ts() + ".json");
         JSONArray arr = new JSONArray();
         for (GeoPin p : pins) arr.put(p.toJson());
         JSONObject root = new JSONObject();
@@ -39,10 +42,8 @@ public final class GeoExporter {
         return out;
     }
 
-    public static File exportKml(List<GeoPin> pins) throws IOException {
-        File dir = new File(DIR_PATH);
-        dir.mkdirs();
-        File out = new File(dir, "export-" + ts() + ".kml");
+    public static File exportKml(Core core, List<GeoPin> pins) throws IOException {
+        File out = new File(dir(core), "export-" + ts() + ".kml");
         StringBuilder sb = new StringBuilder();
         sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         sb.append("<kml xmlns=\"http://www.opengis.net/kml/2.2\"><Document>\n");
@@ -64,9 +65,8 @@ public final class GeoExporter {
         return out;
     }
 
-    public static List<File> listJsonExports() {
-        File dir = new File(DIR_PATH);
-        File[] files = dir.listFiles((f, name) -> name != null && name.endsWith(".json"));
+    public static List<File> listJsonExports(Core core) {
+        File[] files = dir(core).listFiles((f, name) -> name != null && name.endsWith(".json"));
         ArrayList<File> out = new ArrayList<>();
         if (files == null) return out;
         for (File f : files) out.add(f);

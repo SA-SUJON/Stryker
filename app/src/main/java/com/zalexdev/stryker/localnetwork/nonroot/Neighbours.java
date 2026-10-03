@@ -1,11 +1,11 @@
 package com.zalexdev.stryker.localnetwork.nonroot;
 
-import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import com.stryker.terminal.bridge.StrykerLog;
 
 public final class Neighbours {
 
@@ -27,7 +27,7 @@ public final class Neighbours {
             System.loadLibrary("protected");
         } catch (Throwable t) {
             available = false;
-            Log.w(TAG, "native library unavailable: " + t.getMessage());
+            StrykerLog.w(TAG, "native library unavailable: " + t.getMessage());
         }
     }
 
@@ -50,12 +50,12 @@ public final class Neighbours {
             rc = nativeDump(lines);
         } catch (Throwable t) {
             available = false;
-            Log.w(TAG, "netlink dump failed: " + t.getMessage());
+            StrykerLog.w(TAG, "netlink dump failed: " + t.getMessage());
             return out;
         }
         lastError = rc;
         if (rc < 0) {
-            Log.w(TAG, "netlink RTM_GETNEIGH refused, errno " + (-rc));
+            StrykerLog.w(TAG, "netlink RTM_GETNEIGH refused, errno " + (-rc));
             return out;
         }
         for (String line : lines) {

@@ -1,7 +1,6 @@
 package com.zalexdev.stryker.engine;
 
 import android.content.Context;
-import android.util.Log;
 
 import com.zalexdev.stryker.utils.Core;
 
@@ -13,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import com.stryker.terminal.bridge.StrykerLog;
 
 public final class VmProbe {
 
@@ -97,11 +97,10 @@ public final class VmProbe {
             }
             return r;
         } catch (Throwable t) {
-            Log.w(TAG, "probe failed", t);
+            StrykerLog.w(TAG, "probe failed", t);
             return new Result(false, t.getMessage() == null ? t.toString() : t.getMessage());
         } finally {
             if (probeFile != null) {
-                //noinspection ResultOfMethodCallIgnored
                 probeFile.delete();
             }
         }
@@ -113,13 +112,10 @@ public final class VmProbe {
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.directory(RootlessPaths.base(ctx));
             pb.environment().put("LD_LIBRARY_PATH",
-                    RootlessPaths.base(ctx).getAbsolutePath() + ":/system/lib64:/vendor/lib64");
+                    ctx.getApplicationInfo().nativeLibraryDir
+                            + ":" + RootlessPaths.base(ctx).getAbsolutePath()
+                            + ":/system/lib64:/vendor/lib64");
             pb.redirectErrorStream(true);
-            try {
-                //noinspection ResultOfMethodCallIgnored
-                qemu.setExecutable(true, false);
-            } catch (Exception ignored) {
-            }
             process = pb.start();
 
             final Process running = process;
@@ -160,7 +156,7 @@ public final class VmProbe {
             }
             return new Result(true, firstProblem(text, okDetail));
         } catch (Throwable t) {
-            Log.w(TAG, "probe failed", t);
+            StrykerLog.w(TAG, "probe failed", t);
             return new Result(false, t.getMessage() == null ? t.toString() : t.getMessage());
         } finally {
             if (process != null) {

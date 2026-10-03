@@ -8,7 +8,8 @@ StrykerOSS bundles a curated set of network, wireless and web security tools int
 - **Version**: 6.0
 - **Min SDK**: 24 (Android 7.0) · **Target SDK**: 28
 - **License**: [GNU GPL v3.0](LICENSE) (bundled third-party components keep their own licenses — see in-app *About → Open-source licenses*)
-- **Project site**: [zalexdev.com](https://zalexdev.com)
+- **Project site**: [stryker.zalexdev.com](https://stryker.zalexdev.com)
+- **Channel**: [t.me/strykerapp](https://t.me/strykerapp) · **Chat**: [t.me/strykerchat](https://t.me/strykerchat)
 - **Source**: [github.com/zalexdev/strykerapp](https://github.com/zalexdev/strykerapp)
 
 ---

@@ -9,9 +9,9 @@ import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanSettings;
 import android.content.Context;
 import android.os.ParcelUuid;
-import android.util.Log;
 
 import java.util.Collections;
+import com.stryker.terminal.bridge.StrykerLog;
 
 public class WpairScanner {
 
@@ -44,7 +44,7 @@ public class WpairScanner {
 
         @Override
         public void onScanFailed(int errorCode) {
-            Log.e(TAG, "Scan failed with error code: " + errorCode);
+            StrykerLog.e(TAG, "Scan failed with error code: " + errorCode);
             WpairLog.info(appContext, null, "scan failed code=" + errorCode);
             scanning = false;
         }
@@ -158,12 +158,12 @@ public class WpairScanner {
             return true;
         } catch (SecurityException se) {
             lastError = "Missing BLUETOOTH_SCAN permission";
-            Log.e(TAG, lastError, se);
+            StrykerLog.e(TAG, lastError, se);
             WpairLog.info(appContext, null, "scan error: " + lastError);
             return false;
         } catch (Exception e) {
             lastError = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-            Log.e(TAG, "Failed to start scan", e);
+            StrykerLog.e(TAG, "Failed to start scan", e);
             WpairLog.info(appContext, null, "scan error: " + lastError);
             return false;
         }
@@ -178,7 +178,7 @@ public class WpairScanner {
             scanning = false;
             WpairLog.info(appContext, null, "scan stop");
         } catch (Exception e) {
-            Log.e(TAG, "Failed to stop scan", e);
+            StrykerLog.e(TAG, "Failed to stop scan", e);
         }
     }
 
