@@ -31,6 +31,7 @@ import com.zalexdev.stryker.R;
 import com.zalexdev.stryker.custom.WiFINetwork;
 import com.zalexdev.stryker.handshakes.utils.BruteHandshake;
 import com.zalexdev.stryker.utils.Core;
+import com.zalexdev.stryker.utils.GuestFiles;
 import com.zalexdev.stryker.wordlists.WordlistCategory;
 import com.zalexdev.stryker.wordlists.WordlistPickerDialog;
 import com.zalexdev.stryker.wordlists.WordlistStore;
@@ -300,23 +301,23 @@ public class HandshakesAdapter extends RecyclerView.Adapter<HandshakesAdapter.Vi
 
         new Thread(() -> {
             try {
-                String wordlistPath = new WordlistStore(core).reachablePathQuoted(wordlist);
-                if (wordlistPath == null) {
-                    activity.runOnUiThread(() -> {
-                        h.progress.setText(activity.getString(
-                                R.string.hs_wordlist_missing, wordlist.getName()));
-                        h.progress.setTextColor(Color.parseColor("#E53935"));
-                        h.timeLeft.setVisibility(View.GONE);
-                        h.stateChip.setVisibility(View.GONE);
-                        h.cancel.setVisibility(View.GONE);
-                        h.brute.setVisibility(View.VISIBLE);
-                        core.toaster(activity.getString(R.string.hs_wordlist_missing_toast));
-                    });
+                GuestFiles.Resolved list = new WordlistStore(core).reachable(wordlist);
+                if (!list.ok()) {
+                    stopWithProblem(h, activity.getString(
+                            R.string.hs_wordlist_missing, wordlist.getName()), list.problem);
+                    return;
+                }
+                File capHost = captureFile(path);
+                GuestFiles.Resolved cap = GuestFiles.resolveShared(
+                        core, "captured", capHost.getName(), capHost);
+                if (!cap.ok()) {
+                    stopWithProblem(h, activity.getString(
+                            R.string.hs_capture_missing, capHost.getName()), cap.problem);
                     return;
                 }
                 id++;
-                String capRel = path.replace(core.getShareRoot(), core.guestShare());
-                BruteHandshake br = new BruteHandshake(capRel, wordlistPath, core, activity, context, h.progress, h.timeLeft, id);
+                BruteHandshake br = new BruteHandshake(cap.path, list.path, core, activity, context, h.progress, h.timeLeft, id)
+                        .withBssid(finalMac);
                 activity.runOnUiThread(() -> h.cancel.setOnClickListener(v -> {
                     br.kill();
                     h.cancel.setVisibility(View.GONE);
@@ -337,15 +338,37 @@ public class HandshakesAdapter extends RecyclerView.Adapter<HandshakesAdapter.Vi
                         core.putString(finalMac, w.getPsk());
                         if (onChangeListener != null) onChangeListener.run();
                     } else {
-                        h.progress.setText(R.string.pass_not_found);
+                        String why = br.problem();
+                        h.progress.setText(why == null
+                                ? context.getString(R.string.pass_not_found)
+                                : context.getString(R.string.hs_brute_failed, why));
                         h.progress.setTextColor(Color.parseColor("#D32F2F"));
                         h.stateChip.setVisibility(View.GONE);
+                        if (why != null) core.toaster(why);
                     }
                 });
             } catch (ExecutionException | InterruptedException e) {
                 e.printStackTrace();
             }
         }).start();
+    }
+
+    private void stopWithProblem(ViewHolder h, String headline, String detail) {
+        if (detail != null && !detail.isEmpty()) {
+            StrykerLog.w("Handshakes", headline + " — " + detail);
+            core.logger.writeLine(headline + " — " + detail, 3);
+        }
+        activity.runOnUiThread(() -> {
+            h.progress.setText(headline);
+            h.progress.setTextColor(Color.parseColor("#E53935"));
+            h.timeLeft.setVisibility(View.GONE);
+            h.stateChip.setVisibility(View.GONE);
+            h.cancel.setVisibility(View.GONE);
+            h.brute.setVisibility(View.VISIBLE);
+            core.toaster(detail == null || detail.isEmpty()
+                    ? activity.getString(R.string.hs_wordlist_missing_toast)
+                    : detail);
+        });
     }
 
     private void askEmailAndUpload(String path, String displayName) {
