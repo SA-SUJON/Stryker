@@ -163,6 +163,14 @@
             android:name=".localnetwork.utils.NmapReportGenerator"
             android:exported="false" />
 
+        <receiver
+            android:name=".handshakes.utils.BruteStopReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.zalexdev.stryker.BRUTE_STOP" />
+            </intent-filter>
+        </receiver>
+
         <activity
             android:name=".appintro.AppIntroActivity"
             android:exported="false"

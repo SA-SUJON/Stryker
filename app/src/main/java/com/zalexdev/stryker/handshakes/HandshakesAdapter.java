@@ -10,7 +10,6 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
-import android.os.AsyncTask;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -28,8 +27,8 @@ import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 import com.zalexdev.stryker.R;
-import com.zalexdev.stryker.custom.WiFINetwork;
 import com.zalexdev.stryker.handshakes.utils.BruteHandshake;
+import com.zalexdev.stryker.handshakes.utils.BruteJobs;
 import com.zalexdev.stryker.utils.Core;
 import com.zalexdev.stryker.utils.GuestFiles;
 import com.zalexdev.stryker.wordlists.WordlistCategory;
@@ -39,7 +38,6 @@ import com.zalexdev.stryker.wordlists.WordlistStore;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Objects;
-import java.util.concurrent.ExecutionException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import com.stryker.terminal.bridge.StrykerLog;
@@ -55,7 +53,6 @@ public class HandshakesAdapter extends RecyclerView.Adapter<HandshakesAdapter.Vi
     public Activity activity;
     public Core core;
     public Runnable onChangeListener;
-    public int id = 0;
 
     public HandshakesAdapter(Context context, Activity activity, ArrayList<String> hsList) {
         this.context = context;
@@ -199,6 +196,23 @@ public class HandshakesAdapter extends RecyclerView.Adapter<HandshakesAdapter.Vi
 
         h.brute.setOnClickListener(v -> startBrute(h, path, finalMac));
         h.overflow.setOnClickListener(v -> showOverflow(v, index, path, displayName, finalMac));
+
+        String key = keyOf(path);
+        String startProblem = failedStarts.get(key);
+        if (startProblem != null) {
+            h.progress.setVisibility(View.VISIBLE);
+            h.progress.setText(startProblem);
+            h.progress.setTextColor(Color.parseColor("#E53935"));
+            h.timeLeft.setVisibility(View.GONE);
+            h.stateChip.setVisibility(View.GONE);
+            h.cancel.setVisibility(View.GONE);
+            h.brute.setVisibility(View.VISIBLE);
+            return;
+        }
+        BruteHandshake job = BruteJobs.find(key);
+        if (job == null) return;
+        if (job.isRunning()) bindJob(h, job, key);
+        else if (!cracked) bindOutcome(h, job);
     }
 
     private void scanCaptures() {
@@ -299,77 +313,153 @@ public class HandshakesAdapter extends RecyclerView.Adapter<HandshakesAdapter.Vi
         h.cancel.setVisibility(View.VISIBLE);
         h.progress.setText(R.string.hs_progress_starting);
 
+        final String key = keyOf(path);
+        failedStarts.remove(key);
         new Thread(() -> {
-            try {
-                GuestFiles.Resolved list = new WordlistStore(core).reachable(wordlist);
-                if (!list.ok()) {
-                    stopWithProblem(h, activity.getString(
-                            R.string.hs_wordlist_missing, wordlist.getName()), list.problem);
-                    return;
-                }
-                File capHost = captureFile(path);
-                GuestFiles.Resolved cap = GuestFiles.resolveShared(
-                        core, "captured", capHost.getName(), capHost);
-                if (!cap.ok()) {
-                    stopWithProblem(h, activity.getString(
-                            R.string.hs_capture_missing, capHost.getName()), cap.problem);
-                    return;
-                }
-                id++;
-                BruteHandshake br = new BruteHandshake(cap.path, list.path, core, activity, context, h.progress, h.timeLeft, id)
-                        .withBssid(finalMac);
-                activity.runOnUiThread(() -> h.cancel.setOnClickListener(v -> {
-                    br.kill();
-                    h.cancel.setVisibility(View.GONE);
-                    h.brute.setVisibility(View.VISIBLE);
-                    h.stateChip.setVisibility(View.GONE);
-                    h.timeLeft.setVisibility(View.GONE);
-                }));
-                WiFINetwork w = br.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR).get();
-                activity.runOnUiThread(() -> {
-                    h.brute.setVisibility(View.VISIBLE);
-                    h.cancel.setVisibility(View.GONE);
-                    h.timeLeft.setVisibility(View.GONE);
-                    if (w.getOK()) {
-                        h.progress.setText(context.getResources().getString(R.string.pass_founded) + w.getPsk());
-                        h.progress.setTextColor(Color.parseColor("#388E3C"));
-                        h.stateChip.setText(R.string.hs_state_cracked);
-                        h.stateChip.setTextColor(Color.parseColor("#388E3C"));
-                        core.putString(finalMac, w.getPsk());
-                        if (onChangeListener != null) onChangeListener.run();
-                    } else {
-                        String why = br.problem();
-                        h.progress.setText(why == null
-                                ? context.getString(R.string.pass_not_found)
-                                : context.getString(R.string.hs_brute_failed, why));
-                        h.progress.setTextColor(Color.parseColor("#D32F2F"));
-                        h.stateChip.setVisibility(View.GONE);
-                        if (why != null) core.toaster(why);
-                    }
-                });
-            } catch (ExecutionException | InterruptedException e) {
-                e.printStackTrace();
+            GuestFiles.Resolved list = new WordlistStore(core).reachable(wordlist);
+            if (!list.ok()) {
+                stopWithProblem(key, context.getString(
+                        R.string.hs_wordlist_missing, wordlist.getName()), list.problem);
+                return;
             }
+            File capHost = captureFile(path);
+            GuestFiles.Resolved cap = GuestFiles.resolveShared(
+                    core, "captured", capHost.getName(), capHost);
+            if (!cap.ok()) {
+                stopWithProblem(key, context.getString(
+                        R.string.hs_capture_missing, capHost.getName()), cap.problem);
+                return;
+            }
+            BruteHandshake job = new BruteHandshake(core, context, key, capHost.getName(),
+                    cap.path, list.path, wordlist.getName(), finalMac, nextNotificationId());
+            if (!BruteJobs.start(job)) {
+                toastOnUi(context.getString(R.string.hs_brute_already, capHost.getName()));
+            }
+            refreshRow(key);
         }).start();
     }
 
-    private void stopWithProblem(ViewHolder h, String headline, String detail) {
+    private static int notificationSeq = 4100;
+
+    private static synchronized int nextNotificationId() {
+        return ++notificationSeq;
+    }
+
+    private String keyOf(String path) {
+        return captureFile(path).getName();
+    }
+
+    private void refreshRow(String key) {
+        if (activity == null || key == null) return;
+        activity.runOnUiThread(() -> {
+            for (int i = 0; i < rows.size(); i++) {
+                Row row = rows.get(i);
+                if (row.path != null && key.equals(keyOf(row.path))) {
+                    notifyItemChanged(i);
+                    return;
+                }
+            }
+        });
+    }
+
+    private String lastProblemShown;
+
+    private final BruteJobs.Listener jobListener = job -> {
+        refreshRow(job.key);
+        if (job.state() == BruteHandshake.State.FOUND && onChangeListener != null) {
+            onChangeListener.run();
+        }
+        if (job.state() == BruteHandshake.State.FAILED && job.problem() != null
+                && !job.problem().equals(lastProblemShown)) {
+            lastProblemShown = job.problem();
+            core.toaster(job.problem());
+        }
+    };
+
+    public void attach() {
+        BruteJobs.addListener(jobListener);
+    }
+
+    public void detach() {
+        BruteJobs.removeListener(jobListener);
+    }
+
+    private void bindJob(ViewHolder h, BruteHandshake job, String key) {
+        h.brute.setVisibility(View.GONE);
+        h.cancel.setVisibility(View.VISIBLE);
+        h.stateChip.setVisibility(View.VISIBLE);
+        h.stateChip.setText(R.string.hs_state_brute);
+        h.stateChip.setTextColor(Color.parseColor("#AB47BC"));
+        h.progress.setVisibility(View.VISIBLE);
+        h.progress.setTextColor(Color.parseColor("#9E9E9E"));
+        String line = job.progressText();
+        h.progress.setText(line.isEmpty()
+                ? context.getString(R.string.hs_progress_starting) : line);
+        String remaining = job.timeText();
+        h.timeLeft.setVisibility(remaining.isEmpty() ? View.GONE : View.VISIBLE);
+        h.timeLeft.setText(remaining);
+        h.cancel.setOnClickListener(v -> {
+            BruteJobs.cancel(key);
+            refreshRow(key);
+        });
+    }
+
+    private boolean bindOutcome(ViewHolder h, BruteHandshake job) {
+        h.cancel.setVisibility(View.GONE);
+        h.brute.setVisibility(View.VISIBLE);
+        h.timeLeft.setVisibility(View.GONE);
+        switch (job.state()) {
+            case FOUND:
+                h.progress.setVisibility(View.VISIBLE);
+                h.progress.setText(context.getString(R.string.pass_founded) + job.psk());
+                h.progress.setTextColor(Color.parseColor("#388E3C"));
+                h.stateChip.setVisibility(View.VISIBLE);
+                h.stateChip.setText(R.string.hs_state_cracked);
+                h.stateChip.setTextColor(Color.parseColor("#388E3C"));
+                return true;
+            case FAILED:
+                h.progress.setVisibility(View.VISIBLE);
+                h.progress.setText(context.getString(R.string.hs_brute_failed, job.problem()));
+                h.progress.setTextColor(Color.parseColor("#D32F2F"));
+                h.stateChip.setVisibility(View.GONE);
+                return true;
+            case MISSED:
+                h.progress.setVisibility(View.VISIBLE);
+                h.progress.setText(R.string.pass_not_found);
+                h.progress.setTextColor(Color.parseColor("#D32F2F"));
+                h.stateChip.setVisibility(View.GONE);
+                return true;
+            case CANCELLED:
+                h.progress.setVisibility(View.VISIBLE);
+                h.progress.setText(R.string.hs_brute_cancelled);
+                h.progress.setTextColor(Color.parseColor("#9E9E9E"));
+                h.stateChip.setVisibility(View.GONE);
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private void toastOnUi(String message) {
+        if (activity == null || message == null) return;
+        activity.runOnUiThread(() -> core.toaster(message));
+    }
+
+    private void stopWithProblem(String key, String headline, String detail) {
         if (detail != null && !detail.isEmpty()) {
             StrykerLog.w("Handshakes", headline + " — " + detail);
             core.logger.writeLine(headline + " — " + detail, 3);
         }
-        activity.runOnUiThread(() -> {
-            h.progress.setText(headline);
-            h.progress.setTextColor(Color.parseColor("#E53935"));
-            h.timeLeft.setVisibility(View.GONE);
-            h.stateChip.setVisibility(View.GONE);
-            h.cancel.setVisibility(View.GONE);
-            h.brute.setVisibility(View.VISIBLE);
-            core.toaster(detail == null || detail.isEmpty()
-                    ? activity.getString(R.string.hs_wordlist_missing_toast)
-                    : detail);
-        });
+        if (activity == null) return;
+        failedStarts.put(key, headline);
+        toastOnUi(detail == null || detail.isEmpty()
+                ? context.getString(R.string.hs_wordlist_missing_toast)
+                : detail);
+        refreshRow(key);
     }
+
+    private final java.util.Map<String, String> failedStarts =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     private void askEmailAndUpload(String path, String displayName) {
         final Dialog dialog = new Dialog(context);
