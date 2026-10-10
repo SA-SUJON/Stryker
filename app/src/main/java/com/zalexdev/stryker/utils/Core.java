@@ -1288,6 +1288,7 @@ public class Core {
 
     public String getVendorByMacFromDB(String mac){
         String vendor = "";
+        if (mac == null || mac.length() < 8) return vendor;
         try {
             if (db == null || !db.isOpen()){
                 db = SQLiteDatabase.openDatabase("/data/data/com.zalexdev.stryker/files/vendors.db", null, SQLiteDatabase.OPEN_READONLY);

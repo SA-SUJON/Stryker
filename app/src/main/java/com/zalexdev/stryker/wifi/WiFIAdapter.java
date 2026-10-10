@@ -94,6 +94,7 @@ public class WiFIAdapter extends RecyclerView.Adapter<WiFIAdapter.ViewHolder> {
         boolean pmkid;
         boolean answered;
         String source = "";
+        String unreachable;
 
         boolean usable() { return handshake || pmkid; }
     }
@@ -129,9 +130,16 @@ public class WiFIAdapter extends RecyclerView.Adapter<WiFIAdapter.ViewHolder> {
                     + " < /dev/null";
             for (String line : core.customChrootCommand(cmd, true)) {
                 if (line == null) continue;
+                String low = line.toLowerCase(java.util.Locale.ROOT);
                 if (line.contains("packets") || line.contains("networks found")
-                        || line.contains("WPA") || line.contains("WEP")) {
+                        || line.contains("WPA") || line.contains("WEP")
+                        || low.contains("specify a dictionary")) {
                     v.answered = true;
+                }
+                if (low.contains("no such file or directory")
+                        || low.contains("permission denied")) {
+                    v.answered = false;
+                    v.unreachable = line.trim();
                 }
                 java.util.regex.Matcher m = java.util.regex.Pattern
                         .compile("(\\d+)\\s+handshake").matcher(line);
@@ -920,7 +928,9 @@ public class WiFIAdapter extends RecyclerView.Adapter<WiFIAdapter.ViewHolder> {
                                     confirmed
                                             ? (isHandshake ? "Handshake" : "PMKID")
                                                     + " confirmed by " + verdict.source
-                                            : "Saved unchecked — the capture could not be read back");
+                                            : verdict.unreachable == null
+                                                    ? "Saved unchecked — the capture could not be read back"
+                                                    : "Saved unchecked — " + verdict.unreachable);
 
                             String captureDir = core.getShareRoot() + "/captured";
                             String time = new SimpleDateFormat("MM_HH_mm", Locale.ENGLISH).format(new Date());
@@ -929,8 +939,11 @@ public class WiFIAdapter extends RecyclerView.Adapter<WiFIAdapter.ViewHolder> {
                             sendEvent(confirmed
                                     ? (isHandshake ? "Handshake" : "PMKID")
                                             + " confirmed in the capture by " + verdict.source + "."
-                                    : "Saving without checking — neither this app nor aircrack-ng"
-                                            + " could read the capture back.");
+                                    : verdict.unreachable == null
+                                            ? "Saving without checking — neither this app nor"
+                                                    + " aircrack-ng could read the capture back."
+                                            : "Saving without checking — aircrack-ng could not"
+                                                    + " open the capture: " + verdict.unreachable);
                             monitor.stage(AttackStage.SAVE, AttackStage.State.ACTIVE);
                             String saved = archiveCapture(captureDir, filename);
                             if (saved == null) {

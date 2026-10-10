@@ -81,5 +81,16 @@
 
     <string name="hs_wordlist_missing">%1$s could not be reached</string>
     <string name="hs_wordlist_missing_toast">That wordlist is on the phone but nothing could hand it to the cracker. Re-import it from the Wordlists screen.</string>
+    <string name="hs_capture_missing">%1$s could not be reached</string>
+    <string name="hs_brute_failed">Cracking stopped: %1$s</string>
+    <string name="hs_brute_cancelled">Cracking cancelled</string>
+    <string name="hs_brute_already">%1$s is already being cracked</string>
+    <string name="hs_progress_rate">Progress: %1$s k/s</string>
+    <string name="hs_progress_remaining">Time remaining: %1$s</string>
+    <string name="hs_notif_running">Cracking %1$s</string>
+    <string name="hs_notif_stop">Stop</string>
+    <string name="hs_notif_found">Password found</string>
+    <string name="hs_notif_missed">Password not found</string>
+    <string name="hs_notif_failed">Cracking failed</string>
 
 </resources>

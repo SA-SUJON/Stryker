@@ -107,6 +107,18 @@ public class HandshakeStorage extends Fragment {
         reload();
     }
 
+    @Override
+    public void onDestroyView() {
+        if (adapter != null) {
+            adapter.detach();
+            adapter = null;
+        }
+        recyclerView = null;
+        refresh = null;
+        activity = null;
+        super.onDestroyView();
+    }
+
     private String captureDir() {
         return core.getShareRoot() + "/captured";
     }
@@ -239,8 +251,10 @@ public class HandshakeStorage extends Fragment {
         listCard.setVisibility(View.VISIBLE);
         emptyCard.setVisibility(View.GONE);
 
+        if (adapter != null) adapter.detach();
         adapter = new HandshakesAdapter(context, activity, files);
         adapter.setOnChangeListener(this::updateStats);
+        adapter.attach();
         recyclerView.setAdapter(adapter);
 
         updateStats();

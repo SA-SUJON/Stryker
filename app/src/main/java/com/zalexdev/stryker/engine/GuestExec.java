@@ -79,7 +79,7 @@ public final class GuestExec {
         } catch (IOException e) {
             StrykerLog.w(TAG, "run failed: " + e.getMessage());
             logToStore("guest exec failed — no ssh session to the guest on :"
-                    + RootlessPaths.HOST_SSH_PORT + " (" + e.getMessage() + ") · " + shortCmd(command));
+                    + GuestSsh.port() + " (" + e.getMessage() + ") · " + shortCmd(command));
         } finally {
             if (s != null) s.close();
         }
@@ -129,8 +129,9 @@ public final class GuestExec {
         String payload = jobId == null ? wrap(command) : wrapJob(command, jobId);
         try {
             ChannelExec channel = GuestSsh.exec("sh -c " + singleQuote(payload));
+            InputStream input = channel.getInputStream();
             channel.connect(20_000);
-            return new Session(channel, jobId);
+            return new Session(channel, input, jobId);
         } catch (com.jcraft.jsch.JSchException e) {
             GuestSsh.dropIfDead();
             throw new IOException(e.getMessage(), e);
@@ -163,10 +164,10 @@ public final class GuestExec {
         private final String jobId;
         private volatile boolean closed;
 
-        Session(ChannelExec channel, String jobId) throws IOException {
+        Session(ChannelExec channel, InputStream input, String jobId) {
             this.channel = channel;
             this.jobId = jobId;
-            this.input = channel.getInputStream();
+            this.input = input;
             this.reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8));
         }
 

@@ -8,18 +8,18 @@ import android.net.wifi.WifiManager;
 
 import com.zalexdev.stryker.custom.Device;
 import com.zalexdev.stryker.custom.Port;
+import com.zalexdev.stryker.localnetwork.nonroot.IpRange;
 import com.zalexdev.stryker.localnetwork.nonroot.NonRootScanner;
 import com.zalexdev.stryker.logger.Logger;
 import com.zalexdev.stryker.utils.AdvancedProcess;
 import com.zalexdev.stryker.utils.Core;
+import com.zalexdev.stryker.utils.GuestFiles;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetAddress;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -93,7 +93,19 @@ public abstract class AdvancedLocalScanner {
             startScanRootless();
             return;
         }
-        String cmd = "nmap " + getGateway(iface) + " -sn -PE -n -PP -T4 --stats-every 1s";
+        final String localCidr = localCidr(iface);
+        String override = core.getString("local_scan_target");
+        boolean manual = override != null && !override.trim().isEmpty();
+        final String target = manual ? override.trim()
+                : localCidr != null ? localCidr : "192.168.1.1/24";
+        if (manual && HostSweep.outsideTarget(override, localCidr)) {
+            logger.writeLine("Scan target " + override.trim() + " does not contain this device ("
+                    + localCidr + "), so only hosts the router routes to can answer, and none of"
+                    + " them will have a MAC address. Clear the manual target to scan the subnet"
+                    + " you are on.", 3);
+        }
+        final HostSweep sweep = new HostSweep();
+        String cmd = "nmap " + target + " -sn -PE -n -PP -T4 --stats-every 1s";
         new AdvancedProcess(activity, context, cmd, true) {
             @Override
             public void onFinished(ArrayList<String> outputList) {
@@ -101,10 +113,21 @@ public abstract class AdvancedLocalScanner {
                     try {
                         activity.runOnUiThread(() -> onProgressUpdate(100));
                         logger.writeLine("Started local network scanner", 1);
-                        ArrayList<String> newOutputList = core.customChrootCommand("arp-scan -I "+iface+" -l");
-                        outputList.add("STARTEDARPSCAN");
-                        outputList.addAll(newOutputList);
-                        ArrayList<Device> devices = localDevices(outputList);
+                        sweep.nmap(outputList);
+                        int answered = sweep.size();
+                        sweep.arpScan(core.customChrootCommand(
+                                "arp-scan -I " + GuestFiles.shellQuote(iface) + " -l"));
+                        sweep.neighbours(core.customChrootCommand(neighbourCommand(iface), true));
+                        sweep.self(localCidr);
+                        ArrayList<Device> devices = toDevices(sweep);
+                        logger.writeLine("nmap found " + answered + " host(s) up, " + devices.size()
+                                + " after arp-scan", 1);
+                        int blind = sweep.withoutMac();
+                        if (blind > 0) {
+                            logger.writeLine(blind + " host(s) answered without a MAC address. That"
+                                    + " happens when they sit behind a router or the probe went out"
+                                    + " through a VPN; they are listed with the MAC left blank.", 3);
+                        }
                         activity.runOnUiThread(() -> onProgressUpdate(110));
                         core.saveLastNetworkScan(devices);
                         for (Device d : devices) {
@@ -231,6 +254,7 @@ public abstract class AdvancedLocalScanner {
 
             @Override
             public void onNewLine(String line) {
+                sweep.nmapLine(line);
                 Matcher per = Pattern.compile("[0-9]*\\.[0-9]+%").matcher(line);
                 if (line.contains("Nmap done")) {
                     process.destroy();
@@ -309,14 +333,45 @@ public abstract class AdvancedLocalScanner {
 
     public String getGateway(String wlan) {
         String override = core.getString("local_scan_target");
-        if (override != null && !override.isEmpty()) {
-            return override;
+        if (override != null && !override.trim().isEmpty()) {
+            return override.trim();
         }
-        ArrayList<String> output = core.customChrootCommand("ip -o -f inet addr show | awk '/scope global/ {print $2, $4}' | grep " + wlan);
+        String local = localCidr(wlan);
+        return local != null ? local : "192.168.1.1/24";
+    }
+
+    private String localCidr(String wlan) {
+        ArrayList<String> output = core.customChrootCommand(
+                "ip -o -f inet addr show dev " + GuestFiles.shellQuote(wlan)
+                        + " 2>/dev/null | awk '/scope global/ {print $4}'", true);
         for (String line : output) {
-            return line.replace(wlan + " ", "");
+            String t = line == null ? "" : line.trim();
+            int slash = t.indexOf('/');
+            if (slash > 0 && IpRange.isIpv4(t.substring(0, slash))) return t;
         }
-        return "192.168.1.1/24";
+        return null;
+    }
+
+    private static String neighbourCommand(String wlan) {
+        return "ip -4 neigh show 2>/dev/null; cat /proc/net/arp 2>/dev/null; "
+                + "printf '" + HostSweep.SELF_MARK + " %s\\n' \"$(cat "
+                + GuestFiles.shellQuote("/sys/class/net/" + wlan + "/address")
+                + " 2>/dev/null)\"";
+    }
+
+    private ArrayList<Device> toDevices(HostSweep sweep) {
+        ArrayList<Device> out = new ArrayList<>();
+        for (HostSweep.Host h : sweep.hosts()) {
+            Device d = new Device();
+            d.setIp(h.ip);
+            d.setMac(h.mac);
+            String vendor = h.vendor;
+            if (vendor.isEmpty() && h.hasMac()) vendor = core.getVendorByMacFromDB(h.mac);
+            d.setVendor(vendor == null ? "" : vendor);
+            if (!h.name.isEmpty()) d.setSubname(h.name);
+            out.add(d);
+        }
+        return out;
     }
 
     private String intToIP(int ipAddress) {
@@ -325,69 +380,6 @@ public abstract class AdvancedLocalScanner {
                 (ipAddress >> 8) & 0xff,
                 (ipAddress >> 16) & 0xff,
                 (ipAddress >> 24) & 0xff);
-    }
-
-    public ArrayList<Device> localDevices(ArrayList<String> output) {
-        ArrayList<Device> result = new ArrayList<>();
-        Device device = new Device();
-        boolean arp = false;
-        for (int i = 0; i < output.size(); i++) {
-            String temp = output.get(i).replaceAll("\\s+", " ").replace("*", "");
-            if (temp.contains("STARTEDARPSCAN")) {
-                arp = true;
-            }
-            if (!arp){
-            if (temp.contains("Nmap scan report for ")) {
-                device.setIp(temp.replace("Nmap scan report for ", ""));
-            } else if (temp.contains("MAC Address")) {
-                Matcher mac = Pattern.compile("((\\w{2}:){5}\\w{2})").matcher(temp);
-                if (mac.find()) {
-                    device.setMac(Objects.requireNonNull(mac.group(0)).toUpperCase(Locale.ROOT));
-                }
-                String vendor = com.zalexdev.stryker.localnetwork.utils.MacLine.vendorOf(temp);
-                device.setVendor(vendor);
-                result.add(device);
-                device = new Device();
-            }
-
-            }else{
-                temp = temp.replaceAll("\\s+", " ").trim();
-                Matcher mac = Pattern.compile("((\\w{2}:){5}\\w{2})").matcher(temp);
-                if (mac.find()) {
-                    String[] split = temp.split(" ");
-                    if (split[0].contains(".")) {
-                    device.setIp(split[0]);
-                    device.setMac(split[1].toUpperCase(Locale.ROOT));
-                    device.setVendor(core.getVendorByMacFromDB(device.getMac()));
-                    boolean newDevice = true;
-                    for (Device d : result){
-                        if (d.getIp().equals(device.getIp())) {
-                            newDevice = false;
-                            break;
-                        }
-                    }
-                    if (newDevice){
-                        result.add(device);
-                        device = new Device();
-                    }
-                    }
-                }
-            }
-
-        }
-        result.sort(( a, b) -> {
-            int[] aOct = Arrays.stream(a.getIp().split("\\.")).mapToInt(Integer::parseInt).toArray();
-            int[] bOct = Arrays.stream(b.getIp().split("\\.")).mapToInt(Integer::parseInt).toArray();
-            int r = 0;
-            for (int i = 0; i < aOct.length && i < bOct.length; i++) {
-                r = Integer.compare(aOct[i], bOct[i]);
-                if (r != 0) {
-                    return r;
-                }
-            }
-            return r;
-        });
-        return result;
     }
 
     public Device scanLocalDevice(ArrayList<String> output, String ip) {
@@ -461,7 +453,7 @@ public abstract class AdvancedLocalScanner {
 
     public boolean isNewDevice(Device device) {
         for (Device d : devicesOld) {
-            if (d.getIp().contains(device.getIp())) {
+            if (d.getIp().equals(device.getIp())) {
                 return false;
             }
         }

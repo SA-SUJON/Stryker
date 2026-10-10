@@ -17,6 +17,7 @@ public final class UmlEngine implements GuestEngine {
 
     private final Context app;
     private volatile Process process;
+    private volatile int hostSshPort = SSH_PORT;
     private volatile Thread consolePump;
     private volatile String lastError = "";
     private volatile boolean stopRequested;
@@ -44,7 +45,10 @@ public final class UmlEngine implements GuestEngine {
         return new File(app.getApplicationInfo().nativeLibraryDir);
     }
 
-    private static final int BOOT_PING_TIMEOUT_MS = 15_000;
+    private static final int BOOT_PING_TIMEOUT_MS = 30_000;
+    private static final int READY_PING_TIMEOUT_MS = 3_000;
+    private static final long BOOT_TIMEOUT_MS = 150_000;
+    private static final long BOOT_HARD_LIMIT_MS = 420_000;
 
     public File base()    { return new File(app.getFilesDir(), "uml"); }
     public File console() { return new File(base(), "console.log"); }
@@ -177,7 +181,7 @@ public final class UmlEngine implements GuestEngine {
 
     @Override
     public int sshPort() {
-        return SSH_PORT;
+        return hostSshPort;
     }
 
     @Override
@@ -331,8 +335,11 @@ public final class UmlEngine implements GuestEngine {
     private volatile Thread portMirror;
     private final java.util.Set<Integer> mirrored =
             java.util.Collections.synchronizedSet(new java.util.HashSet<Integer>());
+    private final java.util.Map<Integer, Long> mirrorFailedAt =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     private static final long MIRROR_PERIOD_MS = 10_000;
+    private static final long MIRROR_RETRY_MS = 60_000;
 
     private void startPortMirror() {
         if (portMirror != null) return;
@@ -361,6 +368,8 @@ public final class UmlEngine implements GuestEngine {
             for (Integer port : mirrored) GuestSsh.unforwardLocalPort(port);
             mirrored.clear();
         }
+        for (Integer port : mirrorFailedAt.keySet()) GuestSsh.unforwardLocalPort(port);
+        mirrorFailedAt.clear();
     }
 
     private void syncPorts() {
@@ -374,28 +383,41 @@ public final class UmlEngine implements GuestEngine {
             try {
                 int port = Integer.parseInt(v);
                 if (port <= 1024 || port > 65535) continue;
-                if (port == RootlessPaths.GUEST_SSH_PORT || port == SSH_PORT) continue;
+                if (port == RootlessPaths.GUEST_SSH_PORT || port == hostSshPort) continue;
                 live.add(port);
             } catch (NumberFormatException ignored) {
             }
         }
 
+        long now = System.currentTimeMillis();
         for (int port : live) {
             if (mirrored.contains(port)) continue;
+            Long failedAt = mirrorFailedAt.get(port);
+            if (failedAt != null && now - failedAt < MIRROR_RETRY_MS) continue;
             if (GuestSsh.forwardLocalPort(port, port)) {
                 mirrored.add(port);
+                mirrorFailedAt.remove(port);
                 GuestExec.logToStore("guest port " + port + " is now reachable at 127.0.0.1:" + port);
             } else {
-                mirrored.add(port);
+                if (failedAt == null) {
+                    GuestExec.logToStore("guest port " + port + " is not mirrored to 127.0.0.1:"
+                            + port + " yet (" + (GuestPort.free(port)
+                                    ? "no ssh session to carry it"
+                                    : "something on the phone already holds that port")
+                            + "), retrying every " + (MIRROR_RETRY_MS / 1000) + "s");
+                }
+                mirrorFailedAt.put(port, now);
             }
         }
         java.util.List<Integer> gone = new ArrayList<>();
         synchronized (mirrored) {
             for (Integer port : mirrored) if (!live.contains(port)) gone.add(port);
         }
+        for (Integer port : mirrorFailedAt.keySet()) if (!live.contains(port)) gone.add(port);
         for (int port : gone) {
             GuestSsh.unforwardLocalPort(port);
             mirrored.remove(port);
+            mirrorFailedAt.remove(port);
         }
     }
 
@@ -423,7 +445,7 @@ public final class UmlEngine implements GuestEngine {
 
     @Override
     public boolean isReady() {
-        return isRunning() && GuestExec.ping(1000);
+        return isRunning() && GuestExec.ping(READY_PING_TIMEOUT_MS);
     }
 
     @Override
@@ -497,16 +519,24 @@ public final class UmlEngine implements GuestEngine {
             start(share, ramMb, cpus, true);
             if (listener != null) listener.onBootLine("UML kernel started");
 
-            for (int i = 0; i < 150 && !stopRequested; i++) {
+            SshBootWatch watch = new SshBootWatch(hostSshPort, BOOT_TIMEOUT_MS, BOOT_HARD_LIMIT_MS);
+            long lastNote = -1;
+            while (!stopRequested && !watch.expired()) {
                 if (!isRunning()) {
                     Integer code = exitCode();
                     logConsoleTail();
                     return fail(listener, "the guest exited"
                             + (code != null ? " (" + code + ")" : "") + ": " + lastConsoleProblem());
                 }
-                if (GuestSsh.guestReported()) {
-                    if (listener != null && i % 5 == 0) listener.onBootLine("guest up, opening ssh");
-                    if (GuestExec.ping(BOOT_PING_TIMEOUT_MS)) {
+                if (watch.worthLoggingIn() && GuestSsh.guestReported()) {
+                    long slot = watch.elapsedSeconds() / 5;
+                    if (listener != null && slot != lastNote) {
+                        lastNote = slot;
+                        listener.onBootLine("guest up, opening ssh");
+                    }
+                    boolean pong = GuestExec.ping(BOOT_PING_TIMEOUT_MS);
+                    watch.afterLoginAttempt(pong);
+                    if (pong) {
                         lastError = "";
                         lastGuestOk = System.currentTimeMillis();
                         ensureSystemctlShim();
@@ -515,11 +545,13 @@ public final class UmlEngine implements GuestEngine {
                         return true;
                     }
                 }
+                String news = watch.takeNews();
+                if (news != null && listener != null) listener.onBootLine(news);
                 try { Thread.sleep(1000); } catch (InterruptedException e) { break; }
             }
             if (stopRequested) return false;
-            return fail(listener, "the guest did not answer within 150s — "
-                    + lastConsoleProblem());
+            return fail(listener, "the guest did not answer within " + watch.elapsedSeconds() + "s — "
+                    + watch.reason(lastConsoleProblem()));
         } catch (Exception e) {
             StrykerLog.w(TAG, "start failed", e);
             return fail(listener, e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
@@ -602,12 +634,13 @@ public final class UmlEngine implements GuestEngine {
             GuestExec.logToStore("cleared " + reaped
                     + " guest process(es) left over from a previous run before starting");
         }
+        hostSshPort = GuestPort.claim(SSH_PORT, "the guest's SSH");
 
         base().mkdirs();
         shareDir.mkdirs();
         new File(shareDir, "firmware").mkdirs();
 
-        GuestSsh.configure(app, shareDir, SSH_PORT);
+        GuestSsh.configure(app, shareDir, hostSshPort);
         try {
             GuestSsh.publishPublicKey();
         } catch (Exception e) {
@@ -651,7 +684,7 @@ public final class UmlEngine implements GuestEngine {
         cmd.add("--passt");
         cmd.add(passt().getAbsolutePath());
         cmd.add("--fwd");
-        cmd.add("127.0.0.1/" + SSH_PORT + ":" + RootlessPaths.GUEST_SSH_PORT);
+        cmd.add("127.0.0.1/" + hostSshPort + ":" + RootlessPaths.GUEST_SSH_PORT);
         cmd.add("--");
 
         cmd.add(kernel().getAbsolutePath());
