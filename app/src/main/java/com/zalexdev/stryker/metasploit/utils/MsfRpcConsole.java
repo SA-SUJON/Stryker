@@ -2,7 +2,7 @@ package com.zalexdev.stryker.metasploit.utils;
 
 
 import com.zalexdev.stryker.engine.GuestExec;
-import com.zalexdev.stryker.engine.RootlessPaths;
+import com.zalexdev.stryker.engine.GuestSsh;
 import com.zalexdev.stryker.utils.Core;
 
 import java.io.BufferedReader;
@@ -171,7 +171,7 @@ public class MsfRpcConsole {
             return null;
         } catch (Exception e) {
             StrykerLog.e(TAG, label + " guest channel failed", e);
-            return "guest unreachable over ssh on :" + RootlessPaths.HOST_SSH_PORT;
+            return "guest unreachable over ssh on :" + GuestSsh.port();
         }
     }
 

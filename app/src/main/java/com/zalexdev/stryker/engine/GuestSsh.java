@@ -13,8 +13,11 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import com.stryker.terminal.bridge.StrykerLog;
 
 public final class GuestSsh {
@@ -33,6 +36,11 @@ public final class GuestSsh {
 
     private static Session session;
     private static final Object LOCK = new Object();
+
+    private static final int CONNECT_TIMEOUT_MS = 20_000;
+    private static final String PONG = "__STRYKER_PONG__";
+
+    private static final Map<Integer, Integer> wantedForwards = new ConcurrentHashMap<>();
 
     private static volatile long lastLoss;
 
@@ -71,7 +79,18 @@ public final class GuestSsh {
         appContext = context.getApplicationContext();
         shareDir = share;
         port = sshPort > 0 ? sshPort : RootlessPaths.HOST_SSH_PORT;
+        wantedForwards.clear();
+        lastPingFailure = null;
         disconnect();
+    }
+
+    public static int port() {
+        return port;
+    }
+
+    static String lastFailure() {
+        String f = lastPingFailure;
+        return f == null ? "" : f;
     }
 
     private static File keyDir() {
@@ -201,10 +220,27 @@ public final class GuestSsh {
         s.setConfig("PreferredAuthentications", "publickey");
         s.setServerAliveInterval(15_000);
         s.setServerAliveCountMax(4);
-        s.connect(20_000);
+        s.connect(CONNECT_TIMEOUT_MS);
         session = s;
         StrykerLog.i(TAG, "connected to the guest over ssh on port " + port);
+        reapplyForwards(s);
         return s;
+    }
+
+    private static void reapplyForwards(Session s) {
+        for (Map.Entry<Integer, Integer> f : wantedForwards.entrySet()) {
+            try {
+                applyForward(s, f.getKey(), f.getValue());
+            } catch (Exception e) {
+                StrykerLog.w(TAG, "could not restore the forward of 127.0.0.1:" + f.getKey()
+                        + " on the new session: " + e.getMessage());
+            }
+        }
+    }
+
+    private static void applyForward(Session s, int hostPort, int guestPort) throws JSchException {
+        try { s.delPortForwardingL(RootlessPaths.HOST_LOOPBACK, hostPort); } catch (Exception ignored) {}
+        s.setPortForwardingL(RootlessPaths.HOST_LOOPBACK, hostPort, "127.0.0.1", guestPort);
     }
 
     private static boolean looksLikeHostKeyTrouble(JSchException e) {
@@ -240,10 +276,16 @@ public final class GuestSsh {
     }
 
     public static boolean forwardLocalPort(int hostPort, int guestPort) {
+        if (hostPort == port) {
+            StrykerLog.w(TAG, "refusing to forward 127.0.0.1:" + hostPort
+                    + ": it is the port the guest's ssh comes in on");
+            return false;
+        }
+        wantedForwards.put(hostPort, guestPort);
         try {
-            Session s = session();
-            try { s.delPortForwardingL(hostPort); } catch (Exception ignored) {}
-            s.setPortForwardingL(RootlessPaths.HOST_LOOPBACK, hostPort, "127.0.0.1", guestPort);
+            synchronized (LOCK) {
+                applyForward(session(), hostPort, guestPort);
+            }
             StrykerLog.i(TAG, "forwarded 127.0.0.1:" + hostPort + " to guest port " + guestPort);
             return true;
         } catch (Exception e) {
@@ -253,10 +295,11 @@ public final class GuestSsh {
     }
 
     public static boolean unforwardLocalPort(int hostPort) {
+        wantedForwards.remove(hostPort);
         Session s = session;
         if (s == null || !s.isConnected()) return true;
         try {
-            s.delPortForwardingL(hostPort);
+            s.delPortForwardingL(RootlessPaths.HOST_LOOPBACK, hostPort);
             return true;
         } catch (Exception e) {
             return false;
@@ -269,21 +312,24 @@ public final class GuestSsh {
 
     public static boolean ping(int timeoutMs) {
         String stage = "session";
+        int budget = Math.max(timeoutMs, 1000);
         try {
-            ChannelExec c = exec("echo __STRYKER_PONG__");
+            ChannelExec c = exec("echo " + PONG);
             stage = "channel";
             try {
-                c.connect(Math.max(timeoutMs, 1000));
+                InputStream in = c.getInputStream();
+                c.connect(budget);
                 stage = "reply";
-                byte[] buf = new byte[64];
-                int n = c.getInputStream().read(buf);
-                boolean ok = n > 0
-                        && new String(buf, 0, n, StandardCharsets.UTF_8).contains("__STRYKER_PONG__");
-                if (ok && lastPingFailure != null) {
+                if (!awaitPong(c, in, budget)) {
+                    throw new IOException(c.isClosed()
+                            ? "the guest closed the channel without answering"
+                            : "no answer within " + budget + "ms");
+                }
+                if (lastPingFailure != null) {
                     StrykerLog.i(TAG, "guest is answering again");
                     lastPingFailure = null;
                 }
-                return ok;
+                return true;
             } finally {
                 c.disconnect();
             }
@@ -298,6 +344,27 @@ public final class GuestSsh {
                 StrykerLog.w(TAG, "ping failed at " + why);
             }
             return false;
+        }
+    }
+
+    private static boolean awaitPong(ChannelExec c, InputStream in, int budgetMs) throws IOException {
+        long until = System.currentTimeMillis() + budgetMs;
+        StringBuilder got = new StringBuilder();
+        byte[] buf = new byte[64];
+        while (true) {
+            boolean closed = c.isClosed();
+            int avail = in.available();
+            if (avail > 0) {
+                int n = in.read(buf, 0, Math.min(buf.length, avail));
+                if (n < 0) return false;
+                got.append(new String(buf, 0, n, StandardCharsets.UTF_8));
+                if (got.indexOf(PONG) >= 0) return true;
+                if (got.length() > 4096) got.delete(0, got.length() - 64);
+                continue;
+            }
+            if (closed) return false;
+            if (System.currentTimeMillis() >= until) return false;
+            sleep(20);
         }
     }
 
