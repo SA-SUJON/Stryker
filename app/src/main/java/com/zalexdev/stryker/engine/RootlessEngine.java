@@ -22,8 +22,11 @@ public final class RootlessEngine implements GuestEngine {
 
     private static final String TAG = "RootlessEngine";
     private static final int BOOT_TIMEOUT_MS = 150_000;
+    private static final int BOOT_HARD_LIMIT_MS = 420_000;
 
-    private static final int BOOT_PING_TIMEOUT_MS = 15_000;
+    private static final int BOOT_PING_TIMEOUT_MS = 30_000;
+    private static final int READY_PING_TIMEOUT_MS = 3_000;
+    private static final int RECHECK_PING_TIMEOUT_MS = 5_000;
     private static final String PROMPT_MARK = "__STRYKER_ID__";
 
     private static volatile RootlessEngine instance;
@@ -38,6 +41,9 @@ public final class RootlessEngine implements GuestEngine {
     private volatile Process qemuProcess;
     private volatile Process dyingProcess;
     private volatile boolean booted;
+    private volatile boolean booting;
+    private volatile boolean portUnavailable;
+    private volatile int hostSshPort = RootlessPaths.HOST_SSH_PORT;
     private volatile long lastGuestOk;
     private static final long GUEST_FRESH_MS = 15_000;
     private volatile File shareInUse;
@@ -109,7 +115,7 @@ public final class RootlessEngine implements GuestEngine {
 
     @Override
     public int sshPort() {
-        return RootlessPaths.HOST_SSH_PORT;
+        return hostSshPort;
     }
 
     @Override
@@ -143,7 +149,7 @@ public final class RootlessEngine implements GuestEngine {
 
     public boolean isReady() {
         if (!isRunning() || !booted) return false;
-        if (!GuestExec.ping(1000)) return false;
+        if (!GuestExec.ping(READY_PING_TIMEOUT_MS)) return false;
         lastGuestOk = System.currentTimeMillis();
         return true;
     }
@@ -162,7 +168,7 @@ public final class RootlessEngine implements GuestEngine {
         }
         if (isRunning() && booted) {
             for (int i = 0; i < 5; i++) {
-                if (GuestExec.ping(2000)) {
+                if (GuestExec.ping(RECHECK_PING_TIMEOUT_MS)) {
                     if (listener != null) listener.onBooted();
                     return true;
                 }
@@ -180,11 +186,21 @@ public final class RootlessEngine implements GuestEngine {
         }
         lastBootUsedFallback = false;
         stopRequested = false;
+        booting = true;
+        try {
+            return bootWithFallback(listener);
+        } finally {
+            booting = false;
+        }
+    }
+
+    private boolean bootWithFallback(GuestEngine.BootListener listener) {
         String reason = attemptBoot(listener);
         if (reason == null) { lastError = ""; return true; }
 
         Core prefs = prefs();
-        if (autoFallback && prefs != null && !VmSpecs.safeBoot(prefs)) {
+        if (autoFallback && !stopRequested && !portUnavailable
+                && prefs != null && !VmSpecs.safeBoot(prefs)) {
             lastError = reason;
             note(listener, "Boot failed (" + reason + ") — retrying with a safe profile");
             GuestExec.logToStore("VM boot failed (" + reason + "), falling back to the safe profile "
@@ -214,9 +230,19 @@ public final class RootlessEngine implements GuestEngine {
 
     private String attemptBoot(GuestEngine.BootListener listener) {
         try {
+            portUnavailable = false;
             killAndAwait(12_000);
+            if (stopRequested) return "stopped";
+            reapStrayVms();
             clearStaleSockets();
             ensureExecutable();
+            try {
+                hostSshPort = GuestPort.claim(RootlessPaths.HOST_SSH_PORT, "the guest's SSH");
+            } catch (java.io.IOException e) {
+                portUnavailable = true;
+                GuestExec.logToStore(e.getMessage());
+                return e.getMessage();
+            }
             autoGrowDisk();
             VmProbe.ensureCpuProfileVerified(app, prefs());
             List<String> cmd = buildCommand();
@@ -236,29 +262,40 @@ public final class RootlessEngine implements GuestEngine {
 
             new Thread(() -> pumpBootLog(proc, listener), "stryker-qemu-log").start();
 
-            long deadline = System.currentTimeMillis() + BOOT_TIMEOUT_MS;
+            SshBootWatch watch = new SshBootWatch(hostSshPort, BOOT_TIMEOUT_MS, BOOT_HARD_LIMIT_MS);
             boolean consoleTried = false;
-            while (System.currentTimeMillis() < deadline) {
+            while (!watch.expired()) {
                 if (stopRequested) return "stopped";
                 if (!isAlive(proc)) {
                     return describeExit(proc);
                 }
-                if (GuestExec.ping(BOOT_PING_TIMEOUT_MS) && guestShellReady()) {
-                    markBooted();
-                    if (listener != null) listener.onBooted();
-                    return null;
+                if (watch.worthLoggingIn()) {
+                    boolean pong = GuestExec.ping(BOOT_PING_TIMEOUT_MS);
+                    watch.afterLoginAttempt(pong);
+                    if (pong && guestShellReady()) {
+                        markBooted();
+                        if (listener != null) listener.onBooted();
+                        return null;
+                    }
+                }
+                if (stopRequested) return "stopped";
+                if (!isAlive(proc)) {
+                    return describeExit(proc);
                 }
                 if (!consoleTried && VmBootStage.detect(tailLog(120)) >= VmBootStage.AGENT) {
                     consoleTried = true;
+                    watch.noteConsoleLogin();
                     note(listener, "Guest is up but the agent is not answering — starting it");
                     new Thread(this::bootstrapAgentOverConsole, "stryker-agent-bootstrap").start();
                 }
+                String news = watch.takeNews();
+                if (news != null) note(listener, news);
                 sleep(1000);
             }
             java.util.List<String> tail = tailLog(200);
             int stage = VmBootStage.detect(tail);
-            return "Boot timed out after " + (BOOT_TIMEOUT_MS / 1000) + "s — "
-                    + BootDiagnosis.reason(tail, stage);
+            return "Boot timed out after " + watch.elapsedSeconds() + "s — "
+                    + watch.reason(BootDiagnosis.reason(tail, stage));
         } catch (java.io.IOException e) {
             StrykerLog.e(TAG, "start failed", e);
             String msg = e.getMessage() == null ? "" : e.getMessage();
@@ -368,6 +405,60 @@ public final class RootlessEngine implements GuestEngine {
             if (f != null && f.exists())
                 f.delete();
         } catch (Throwable ignored) {
+        }
+    }
+
+    private int reapStrayVms() {
+        java.util.List<Integer> pids = findVmPids();
+        if (pids.isEmpty()) return 0;
+        StrykerLog.w(TAG, "stopping VM process(es) left over from an earlier run: " + pids);
+        for (int pid : pids) android.os.Process.sendSignal(pid, 15);
+        long deadline = System.currentTimeMillis() + 4000;
+        while (System.currentTimeMillis() < deadline && !findVmPids().isEmpty()) sleep(200);
+        for (int pid : findVmPids()) {
+            StrykerLog.w(TAG, "VM pid " + pid + " ignored SIGTERM, killing");
+            android.os.Process.killProcess(pid);
+        }
+        deadline = System.currentTimeMillis() + 3000;
+        while (System.currentTimeMillis() < deadline && !findVmPids().isEmpty()) sleep(100);
+        GuestExec.logToStore("stopped " + pids.size() + " QEMU process(es) left over from an earlier"
+                + " run — they held the VM disk and its SSH port");
+        return pids.size();
+    }
+
+    private java.util.List<Integer> findVmPids() {
+        java.util.List<Integer> out = new ArrayList<>();
+        String disk = RootlessPaths.rootfs(app).getAbsolutePath();
+        String[] entries = new File("/proc").list();
+        if (entries == null) return out;
+        int self = android.os.Process.myPid();
+        for (String entry : entries) {
+            int pid;
+            try {
+                pid = Integer.parseInt(entry);
+            } catch (NumberFormatException e) {
+                continue;
+            }
+            if (pid == self) continue;
+            String cmd = readCmdline(pid);
+            if (cmd != null && cmd.contains("libqemu.so") && cmd.contains("file=" + disk + ",")) {
+                out.add(pid);
+            }
+        }
+        return out;
+    }
+
+    private static String readCmdline(int pid) {
+        try (java.io.FileInputStream in = new java.io.FileInputStream("/proc/" + pid + "/cmdline")) {
+            java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[4096];
+            int n;
+            while (bytes.size() < 32 * 1024 && (n = in.read(buf)) > 0) bytes.write(buf, 0, n);
+            if (bytes.size() == 0) return null;
+            return new String(bytes.toByteArray(), java.nio.charset.StandardCharsets.UTF_8)
+                    .replace('\0', ' ');
+        } catch (Exception e) {
+            return null;
         }
     }
 
@@ -965,6 +1056,7 @@ public final class RootlessEngine implements GuestEngine {
         if (isRunning()) {
             if (GuestExec.ping(1500)) {
                 lastGuestOk = System.currentTimeMillis();
+                if (booting && !booted) return GuestEngine.State.BOOTING;
                 markBooted();
                 return GuestEngine.State.READY;
             }
@@ -1087,7 +1179,7 @@ public final class RootlessEngine implements GuestEngine {
         }
 
         a.add("-netdev"); a.add("user,id=net0,ipv6=off"
-                + ",hostfwd=tcp:" + RootlessPaths.HOST_LOOPBACK + ":" + RootlessPaths.HOST_SSH_PORT
+                + ",hostfwd=tcp:" + RootlessPaths.HOST_LOOPBACK + ":" + hostSshPort
                 + "-:" + RootlessPaths.GUEST_SSH_PORT);
         a.add("-device"); a.add("virtio-net-pci,netdev=net0,romfile=");
 
@@ -1117,7 +1209,7 @@ public final class RootlessEngine implements GuestEngine {
 
         if (shareActive && shareInUse != null) {
             try {
-                GuestSsh.configure(app, shareInUse, RootlessPaths.HOST_SSH_PORT);
+                GuestSsh.configure(app, shareInUse, hostSshPort);
                 GuestSsh.publishPublicKey();
             } catch (Exception e) {
                 GuestExec.logToStore("could not place the app's ssh key in the share ("

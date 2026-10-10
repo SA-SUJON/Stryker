@@ -37,7 +37,9 @@ public final class BootDiagnosis {
         boolean killedInit = false;
         boolean noSpace = false;
         boolean oom = false;
+        boolean madvRemove = false;
         String passt = null;
+        String passtSyscall = null;
 
         for (String raw : tail) {
             if (raw == null) continue;
@@ -47,6 +49,10 @@ public final class BootDiagnosis {
             if (lower.contains("attempted to kill init")) killedInit = true;
             if (lower.contains("no space left")) noSpace = true;
             if (lower.contains("out of memory") || lower.contains("oom-kill")) oom = true;
+            if (lower.contains("madv_remove failed")) madvRemove = true;
+            if (lower.contains("passt") && lower.contains("sigsys") && passtSyscall == null) {
+                passtSyscall = syscallOf(lower);
+            }
             if (lower.startsWith("passt:") || lower.contains("passt exited")
                     || (lower.contains("couldn't") && lower.contains("port"))) {
                 if (passt == null && lower.contains("couldn't")) passt = raw.trim();
@@ -71,6 +77,11 @@ public final class BootDiagnosis {
             return "the guest ran out of memory. Give it less RAM in the engine's settings, or"
                     + " close some apps: the guest's memory comes out of the phone's.";
         }
+        if (passtSyscall != null && !madvRemove) {
+            return "networking did not start: this phone's app sandbox killed passt, the forwarder"
+                    + " behind the guest's SSH port, on " + passtSyscall + ". Nothing can reach the"
+                    + " guest without it, so this engine cannot work here — use the QEMU engine.";
+        }
         if (passt != null) {
             return "networking did not start: " + passt;
         }
@@ -78,6 +89,20 @@ public final class BootDiagnosis {
             return "the guest kernel killed its own init. Its console is the only account of why.";
         }
         return null;
+    }
+
+    private static String syscallOf(String lower) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("syscall\\s+(\\d+)").matcher(lower);
+        if (!m.find()) return "a system call it needs";
+        String nr = m.group(1);
+        switch (nr) {
+            case "434": return "syscall 434 (pidfd_open)";
+            case "435": return "syscall 435 (clone3)";
+            case "436": return "syscall 436 (close_range)";
+            case "437": return "syscall 437 (openat2)";
+            case "439": return "syscall 439 (faccessat2)";
+            default: return "syscall " + nr;
+        }
     }
 
     public static String reason(List<String> tail, int stage) {

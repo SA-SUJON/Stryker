@@ -81,5 +81,7 @@
 
     <string name="hs_wordlist_missing">%1$s could not be reached</string>
     <string name="hs_wordlist_missing_toast">That wordlist is on the phone but nothing could hand it to the cracker. Re-import it from the Wordlists screen.</string>
+    <string name="hs_capture_missing">%1$s could not be reached</string>
+    <string name="hs_brute_failed">Cracking stopped: %1$s</string>
 
 </resources>
