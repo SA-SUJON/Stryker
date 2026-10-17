@@ -1164,6 +1164,12 @@ public class Core {
                 EXECUTE + "'" + SHELL + "'\n" + terminated(command) + "exit\n", false, null, false);
     }
 
+    public void stopAirodump(String outputPrefix) {
+        String match = GuestFiles.shellQuote("^airodump-ng .* -w " + outputPrefix + " ");
+        customChrootCommand("pkill -INT -f " + match + " >/dev/null 2>&1; "
+                + "for i in 1 2 3 4 5; do pgrep -f " + match + " >/dev/null 2>&1 || break; sleep 1; done; true", true);
+    }
+
     @Deprecated
     public boolean guestHasBinary(String bin) {
         return hasBinary(bin);
