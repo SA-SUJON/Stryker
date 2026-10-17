@@ -20,22 +20,23 @@ import com.zalexdev.stryker.R;
 import com.zalexdev.stryker.utils.Core;
 
 import java.util.ArrayList;
+import java.util.Locale;
 
 public class StoredAdapter extends RecyclerView.Adapter<StoredAdapter.ViewHolder> {
 
     private final Activity activity;
     private final Context context;
     private final Core core;
-    private final ArrayList<ArrayList<String>> stored;
+    private final ArrayList<ArrayList<String>> stored = new ArrayList<>();
 
     public StoredAdapter(Context context, Activity activity, ArrayList<ArrayList<String>> stored) {
         this.activity = activity;
         this.context = context;
         core = new Core(context);
-        this.stored = stored;
-        for (int i = 0; i < stored.size(); i++) {
-            if (stored.get(i).size() < 4) {
-                stored.remove(i);
+        if (stored == null) return;
+        for (ArrayList<String> network : stored) {
+            if (network != null && network.size() >= 4) {
+                this.stored.add(network);
             }
         }
     }
@@ -49,20 +50,21 @@ public class StoredAdapter extends RecyclerView.Adapter<StoredAdapter.ViewHolder
 
     @SuppressLint({"UseCompatLoadingForDrawables", "SetTextI18n"})
     @Override
-    public void onBindViewHolder(@NonNull ViewHolder adapter, @SuppressLint("RecyclerView") final int position) {
-        adapter.name.setText(stored.get(position).get(2) + " (" + stored.get(position).get(3).toUpperCase() + ")");
-        adapter.additional.setText(getAdditionalInfo(position));
+    public void onBindViewHolder(@NonNull ViewHolder adapter, int position) {
+        ArrayList<String> network = stored.get(position);
+        adapter.name.setText(field(network, 2) + " (" + field(network, 3).toUpperCase(Locale.ROOT) + ")");
+        adapter.additional.setText(getAdditionalInfo(network));
         adapter.copy_password.setOnClickListener(view -> {
-            core.copyToClipBoard(stored.get(position).get(0));
+            core.copyToClipBoard(field(network, 0));
             core.toaster("Password copied to clipboard!");
         });
         adapter.copy_password.setOnLongClickListener(view -> {
             core.toaster("Copy password to clipboard.");
             return false;
         });
-        adapter.delete.setOnClickListener(view -> removeNetwork(position));
+        adapter.delete.setOnClickListener(view -> removeNetwork(network));
         adapter.cardView.setOnLongClickListener(view -> {
-            removeNetwork(position);
+            removeNetwork(network);
             return false;
         });
     }
@@ -77,10 +79,15 @@ public class StoredAdapter extends RecyclerView.Adapter<StoredAdapter.ViewHolder
         return position;
     }
 
-    private String getAdditionalInfo(int position) {
+    private static String field(ArrayList<String> network, int index) {
+        String value = index < network.size() ? network.get(index) : null;
+        return value == null ? "" : value;
+    }
+
+    private String getAdditionalInfo(ArrayList<String> network) {
         StringBuilder result = new StringBuilder();
-        String password = stored.get(position).get(0);
-        String wps_pin = stored.get(position).get(1);
+        String password = field(network, 0);
+        String wps_pin = field(network, 1);
         if (!password.isEmpty()) {
             result.append("Password: ").append(password);
         }
@@ -90,15 +97,16 @@ public class StoredAdapter extends RecyclerView.Adapter<StoredAdapter.ViewHolder
         return result.toString();
     }
 
-    private void removeNetwork(int position) {
+    private void removeNetwork(ArrayList<String> network) {
         MaterialAlertDialogBuilder adb = new MaterialAlertDialogBuilder(context)
                 .setTitle("Confirmation")
                 .setMessage("Are you sure to delete this saved network?")
                 .setPositiveButton(context.getResources().getString(R.string.yes), (di, i) -> {
-                    core.removeSavedNetwork(stored.get(position).get(3));
-                    stored.remove(position);
-                    notifyItemRemoved(position);
-                    notifyItemRangeChanged(position, stored.size());
+                    int index = stored.indexOf(network);
+                    if (index < 0) return;
+                    core.removeSavedNetwork(field(network, 3));
+                    stored.remove(index);
+                    notifyItemRemoved(index);
                 })
                 .setNegativeButton(android.R.string.cancel, (di, i) -> {});
         adb.show();

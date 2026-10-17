@@ -973,9 +973,6 @@ public class Wifi extends Fragment {
             if (mdk4 != null) {
                 mdk4.kill();
             }
-            if (airodump != null) {
-                airodump.kill();
-            }
             try {
                 csvReader.get().cancel();
             } catch (Exception e) {
@@ -988,6 +985,10 @@ public class Wifi extends Fragment {
                 monitor.stage(AttackStage.SAVE, AttackStage.State.ACTIVE);
             }
             new Thread(() -> {
+                core.stopAirodump(core.guestShare() + "/hs/handshakenow");
+                if (airodump != null) {
+                    airodump.kill();
+                }
                 if (captured > 0) {
                     String strDate = new SimpleDateFormat("dd-MM_HH-mm", Locale.ENGLISH).format(new Date());
                     String dest = capturedDir + "/MassHS_" + captured + "_" + strDate + ".cap";

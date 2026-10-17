@@ -29,6 +29,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.core.app.NotificationCompat;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.button.MaterialButton;
@@ -810,7 +811,48 @@ public class WiFIAdapter extends RecyclerView.Adapter<WiFIAdapter.ViewHolder> {
                                                 + "s first to find the clients");
                                 monitor.metric(AttackMetric.STATE, "Listening");
                             }
-                            while (!hsStatus[0] && !pmkidStatus[0] && !canceled){
+                            String hsDir = core.getShareRoot() + "/hs";
+                            String capName = null;
+                            Verdict verdict = null;
+                            while (!canceled){
+                                    if (hsStatus[0] || pmkidStatus[0]) {
+                                        if (deauther != null) {
+                                            deauther.kill();
+                                            deauther = null;
+                                        }
+                                        monitor.stage(AttackStage.EAPOL, AttackStage.State.ACTIVE,
+                                                "Checking what the capture holds");
+                                        monitor.metric(AttackMetric.STATE, "Checking");
+                                        core.stopAirodump(guestShare + "/hs/handshake");
+                                        if (airodump != null) airodump.kill();
+                                        if (canceled) break;
+                                        capName = newestCapture(hsDir);
+                                        verdict = capName == null ? new Verdict()
+                                                : verifyCapture(hsDir + "/" + capName,
+                                                        guestShare + "/hs/" + capName,
+                                                        network.getMac());
+                                        if (!verdict.answered || verdict.usable()) break;
+                                        capName = null;
+                                        verdict = null;
+                                        hsStatus[0] = false;
+                                        pmkidStatus[0] = false;
+                                        sendEvent("Announced, but not there: the file holds no handshake"
+                                                + " and no PMKID — still listening.");
+                                        monitor.stage(AttackStage.EAPOL, AttackStage.State.ACTIVE,
+                                                "False alarm — waiting for a client to rejoin");
+                                        monitor.metric(AttackMetric.STATE, "Listening");
+                                        airodump = startAirodump(monitor, network, capIface,
+                                                guestShare, lockedChannel[0], airoRunning, hsStatus,
+                                                pmkidStatus, this::sendEvent);
+                                        bursting = false;
+                                        burstStartedAt[0] = 0L;
+                                        phaseEnds = System.currentTimeMillis() + DEAUTH_QUIET_MS;
+                                        if (deauth) {
+                                            monitor.stage(AttackStage.DEAUTH, AttackStage.State.PENDING,
+                                                    "Re-listening after a false alarm");
+                                        }
+                                        continue;
+                                    }
                                     if (airodump != null && !airodump.isRunning()){
                                         sendEvent("airodump-ng stopped unexpectedly — aborting.");
                                         monitor.failStage(AttackStage.CAPTURE, "airodump-ng exited",
@@ -887,7 +929,9 @@ public class WiFIAdapter extends RecyclerView.Adapter<WiFIAdapter.ViewHolder> {
                             airodump.kill();
                             }
                             if (canceled) return;
-                            if (!hsStatus[0] && !pmkidStatus[0]) {
+                            if (verdict == null) {
+                                hsStatus[0] = false;
+                                pmkidStatus[0] = false;
                                 sendEvent("Nothing was captured — no handshake and no PMKID.");
                                 monitor.failStage(AttackStage.EAPOL,
                                         "No handshake and no PMKID",
@@ -896,25 +940,9 @@ public class WiFIAdapter extends RecyclerView.Adapter<WiFIAdapter.ViewHolder> {
                                 activity.runOnUiThread(this::onFinished);
                                 return;
                             }
-                            String hsDir = core.getShareRoot() + "/hs";
-                            String capName = newestCapture(hsDir);
-                            monitor.stage(AttackStage.EAPOL, AttackStage.State.ACTIVE,
-                                    "Checking what the capture holds");
-                            Verdict verdict = capName == null ? new Verdict()
-                                    : verifyCapture(hsDir + "/" + capName,
-                                            core.guestShare() + "/hs/" + capName,
-                                            network.getMac());
-                            if (verdict.answered && !verdict.usable()) {
-                                sendEvent("Announced, but not there: the file holds no handshake"
-                                        + " and no PMKID.");
-                                monitor.failStage(AttackStage.EAPOL,
-                                        "Nothing crackable in the capture",
-                                        "airodump-ng reported a catch, but the file holds no"
-                                                + " handshake and no PMKID. Nothing was saved.");
-                                activity.runOnUiThread(this::onFinished);
-                                return;
-                            }
                             if (capName == null) {
+                                hsStatus[0] = false;
+                                pmkidStatus[0] = false;
                                 sendEvent("Announced, but airodump-ng wrote no capture file.");
                                 monitor.failStage(AttackStage.EAPOL, "No capture file",
                                         "airodump-ng reported a catch but left nothing on disk.");
@@ -924,6 +952,12 @@ public class WiFIAdapter extends RecyclerView.Adapter<WiFIAdapter.ViewHolder> {
 
                             boolean confirmed = verdict.usable();
                             boolean isHandshake = confirmed ? verdict.handshake : hsStatus[0];
+                            hsStatus[0] = isHandshake;
+                            pmkidStatus[0] = !isHandshake;
+                            if (confirmed) {
+                                monitor.metric(AttackMetric.STATE, (isHandshake ? "Handshake" : "PMKID") + " captured");
+                                monitor.metricColor(AttackMetric.STATE, ContextCompat.getColor(context, R.color.green));
+                            }
                             monitor.stage(AttackStage.EAPOL, AttackStage.State.DONE,
                                     confirmed
                                             ? (isHandshake ? "Handshake" : "PMKID")
@@ -1388,7 +1422,7 @@ public class WiFIAdapter extends RecyclerView.Adapter<WiFIAdapter.ViewHolder> {
             @Override
             public void onNewLine(String line) {
                 try {
-                    if (line == null) return;
+                    if (line == null || !isRunning()) return;
                     if (line.contains(network.getMac().toUpperCase())
                             || line.contains(network.getMac())
                             || line.contains(network.getMac().toLowerCase())
@@ -1401,12 +1435,14 @@ public class WiFIAdapter extends RecyclerView.Adapter<WiFIAdapter.ViewHolder> {
                         airoRunning[0] = true;
                     }
                     if (line.contains("WPA handshake:")) {
-                        say.line("Handshake captured! Bingo!");
+                        if (!hsStatus[0]) say.line("airodump-ng reports a handshake — checking the capture...");
                         hsStatus[0] = true;
+                        return;
                     }
                     if (line.contains("PMKID")) {
-                        say.line("PMKID captured! Bingo!");
+                        if (!pmkidStatus[0]) say.line("airodump-ng reports a PMKID — checking the capture...");
                         pmkidStatus[0] = true;
+                        return;
                     }
                     monitor.airodump(line, network.getMac());
                 } catch (Exception ignored) {

@@ -1,5 +1,6 @@
 package com.zalexdev.stryker.handshakes;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -260,24 +261,34 @@ public class HandshakeStorage extends Fragment {
         updateStats();
     }
 
+    @SuppressLint("SetTextI18n")
     private void updateStats() {
         if (adapter == null) return;
         int total = adapter.hslist.size();
-        int cracked = 0;
-        long bytes = 0;
-        for (String path : adapter.hslist) {
-            String mac = path;
-            Matcher m = MAC_PATTERN.matcher(path);
-            if (m.find()) mac = m.group(0);
-            String stored = core.getString(mac);
-            if (stored != null && !stored.isEmpty()) cracked++;
-            File f = path.startsWith("/") ? new File(path) : new File(captureDir(), path);
-            if (f.exists()) bytes += f.length();
+        if (total != 0) {
+            int cracked = 0;
+            long bytes = 0;
+            for (String path : adapter.hslist) {
+                String mac = path;
+                Matcher m = MAC_PATTERN.matcher(path);
+                if (m.find()) mac = m.group(0);
+                String stored = core.getString(mac);
+                if (stored != null && !stored.isEmpty()) cracked++;
+                File f = path.startsWith("/") ? new File(path) : new File(captureDir(), path);
+                if (f.exists()) bytes += f.length();
+            }
+            statusTitle.setText(getString(R.string.hs_status_count, total));
+            metaTotal.setText(String.valueOf(total));
+            metaCracked.setText(String.valueOf(cracked));
+            metaSize.setText(humanSize(bytes));
+        } else {
+            listCard.setVisibility(View.GONE);
+            emptyCard.setVisibility(View.VISIBLE);
+            statusTitle.setText(R.string.hs_status_empty);
+            metaTotal.setText("0");
+            metaCracked.setText("0");
+            metaSize.setText("0 KB");
         }
-        statusTitle.setText(getString(R.string.hs_status_count, total));
-        metaTotal.setText(String.valueOf(total));
-        metaCracked.setText(String.valueOf(cracked));
-        metaSize.setText(humanSize(bytes));
     }
 
     private static String humanSize(long bytes) {

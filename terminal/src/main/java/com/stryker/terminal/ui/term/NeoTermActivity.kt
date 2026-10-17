@@ -60,6 +60,7 @@ class NeoTermActivity : AppCompatActivity(), ServiceConnection, SharedPreference
 
   var addSessionListener = createAddSessionListener()
   private var termService: NeoTermService? = null
+  private val eventSubscriber = EventSubscriber()
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
@@ -245,7 +246,7 @@ class NeoTermActivity : AppCompatActivity(), ServiceConnection, SharedPreference
 
   override fun onStart() {
     super.onStart()
-    EventBus.getDefault().register(this)
+    EventBus.getDefault().register(eventSubscriber)
     val tab = tabSwitcher.selectedTab as NeoTab?
     tab?.onStart()
   }
@@ -255,7 +256,7 @@ class NeoTermActivity : AppCompatActivity(), ServiceConnection, SharedPreference
     forEachTab<TermTab> { it.resetAutoCompleteStatus() }
     val tab = tabSwitcher.selectedTab as NeoTab?
     tab?.onStop()
-    EventBus.getDefault().unregister(this)
+    EventBus.getDefault().unregister(eventSubscriber)
   }
 
   override fun onDestroy() {
@@ -742,74 +743,76 @@ class NeoTermActivity : AppCompatActivity(), ServiceConnection, SharedPreference
       .forEach(callback)
   }
 
-  @Suppress("unused")
-  @Subscribe(threadMode = ThreadMode.MAIN)
-  fun onTabCloseEvent(tabCloseEvent: TabCloseEvent) {
-    val tab = tabCloseEvent.termTab
-    toggleSwitcher(showSwitcher = true, easterEgg = false)
-    tabSwitcher.removeTab(tab)
+  inner class EventSubscriber {
+    @Suppress("unused")
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    fun onTabCloseEvent(tabCloseEvent: TabCloseEvent) {
+      val tab = tabCloseEvent.termTab
+      toggleSwitcher(showSwitcher = true, easterEgg = false)
+      tabSwitcher.removeTab(tab)
 
-    if (tabSwitcher.count > 1) {
-      var index = tabSwitcher.indexOf(tab)
-      if (NeoPreference.isNextTabEnabled()) {
-        if (--index < 0) index = tabSwitcher.count - 1
-      } else {
-        if (++index >= tabSwitcher.count) index = 0
+      if (tabSwitcher.count > 1) {
+        var index = tabSwitcher.indexOf(tab)
+        if (NeoPreference.isNextTabEnabled()) {
+          if (--index < 0) index = tabSwitcher.count - 1
+        } else {
+          if (++index >= tabSwitcher.count) index = 0
+        }
+        switchToSession(tabSwitcher.getTab(index))
       }
-      switchToSession(tabSwitcher.getTab(index))
-    }
-  }
-
-  @Suppress("unused", "UNUSED_PARAMETER")
-  @Subscribe(threadMode = ThreadMode.MAIN)
-  fun onToggleFullScreenEvent(toggleFullScreenEvent: ToggleFullScreenEvent) {
-    val fullScreen = fullScreenHelper.fullScreen
-    setFullScreenMode(!fullScreen)
-  }
-
-  @Suppress("unused", "UNUSED_PARAMETER")
-  @Subscribe(threadMode = ThreadMode.MAIN)
-  fun onToggleImeEvent(toggleImeEvent: ToggleImeEvent) {
-    if (!tabSwitcher.isSwitcherShown) {
-      val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-      imm.toggleSoftInput(InputMethodManager.SHOW_IMPLICIT, 0)
-    }
-  }
-
-  @Subscribe(threadMode = ThreadMode.MAIN)
-  fun onTitleChangedEvent(titleChangedEvent: TitleChangedEvent) {
-    if (!tabSwitcher.isSwitcherShown) {
-      toolbar.title = titleChangedEvent.title
-    }
-  }
-
-  @Suppress("unused", "UNUSED_PARAMETER")
-  @Subscribe(threadMode = ThreadMode.MAIN)
-  fun onCreateNewSessionEvent(createNewSessionEvent: CreateNewSessionEvent) {
-    addNewSession()
-  }
-
-  @Suppress("unused", "UNUSED_PARAMETER")
-  @Subscribe(threadMode = ThreadMode.MAIN)
-  fun onSwitchSessionEvent(switchSessionEvent: SwitchSessionEvent) {
-    if (tabSwitcher.count < 2) {
-      return
     }
 
-    val rangedInt = RangedInt(tabSwitcher.selectedTabIndex, (0 until tabSwitcher.count))
-    val nextIndex = if (switchSessionEvent.toNext) rangedInt.inc() else rangedInt.dec()
-    if (!tabSwitcher.isSwitcherShown) {
-      tabSwitcher.showSwitcher()
+    @Suppress("unused", "UNUSED_PARAMETER")
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    fun onToggleFullScreenEvent(toggleFullScreenEvent: ToggleFullScreenEvent) {
+      val fullScreen = fullScreenHelper.fullScreen
+      setFullScreenMode(!fullScreen)
     }
-    switchToSession(tabSwitcher.getTab(nextIndex))
-  }
 
-  @Suppress("unused", "UNUSED_PARAMETER")
-  @Subscribe(threadMode = ThreadMode.MAIN)
-  fun onSwitchIndexedSessionEvent(switchIndexedSessionEvent: SwitchIndexedSessionEvent) {
-    val nextIndex = switchIndexedSessionEvent.index - 1
-    if (nextIndex in (0 until tabSwitcher.count) && nextIndex != tabSwitcher.selectedTabIndex) {
+    @Suppress("unused", "UNUSED_PARAMETER")
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    fun onToggleImeEvent(toggleImeEvent: ToggleImeEvent) {
+      if (!tabSwitcher.isSwitcherShown) {
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.toggleSoftInput(InputMethodManager.SHOW_IMPLICIT, 0)
+      }
+    }
+
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    fun onTitleChangedEvent(titleChangedEvent: TitleChangedEvent) {
+      if (!tabSwitcher.isSwitcherShown) {
+        toolbar.title = titleChangedEvent.title
+      }
+    }
+
+    @Suppress("unused", "UNUSED_PARAMETER")
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    fun onCreateNewSessionEvent(createNewSessionEvent: CreateNewSessionEvent) {
+      addNewSession()
+    }
+
+    @Suppress("unused", "UNUSED_PARAMETER")
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    fun onSwitchSessionEvent(switchSessionEvent: SwitchSessionEvent) {
+      if (tabSwitcher.count < 2) {
+        return
+      }
+
+      val rangedInt = RangedInt(tabSwitcher.selectedTabIndex, (0 until tabSwitcher.count))
+      val nextIndex = if (switchSessionEvent.toNext) rangedInt.inc() else rangedInt.dec()
+      if (!tabSwitcher.isSwitcherShown) {
+        tabSwitcher.showSwitcher()
+      }
       switchToSession(tabSwitcher.getTab(nextIndex))
+    }
+
+    @Suppress("unused", "UNUSED_PARAMETER")
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    fun onSwitchIndexedSessionEvent(switchIndexedSessionEvent: SwitchIndexedSessionEvent) {
+      val nextIndex = switchIndexedSessionEvent.index - 1
+      if (nextIndex in (0 until tabSwitcher.count) && nextIndex != tabSwitcher.selectedTabIndex) {
+        switchToSession(tabSwitcher.getTab(nextIndex))
+      }
     }
   }
 
