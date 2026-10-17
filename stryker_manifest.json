@@ -152,13 +152,13 @@
     },
     "uml_kernel": {
       "url": "https://github.com/zalexdev/strykerapp/releases/download/rootless-650/linux-uml",
-      "sha256": "c091ecdabce9bc32b7853ba144d7873711c3f013ea85c5722eab07a0fc4e4bd6",
-      "size": 19763856
+      "sha256": "25990d4a0cd8caa26bc1761be112f91790e7ec9695b58cdbe6ee00e08ad8e5c3",
+      "size": 21538600
     },
     "uml_stub": {
       "url": "https://github.com/zalexdev/strykerapp/releases/download/rootless-650/stub_exe",
-      "sha256": "83f51f7c45133daa135b595562b09c5e2829f1d0f1e00b7fce2a7695370781fc",
-      "size": 1920
+      "sha256": "27273efe3344f5ea48e30fc0bd9c564f8ba56ad7e9e4662868c95ee1609b0f55",
+      "size": 1968
     }
   }
 }
