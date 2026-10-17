@@ -81,8 +81,10 @@ import java.net.URI;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
@@ -177,31 +179,34 @@ public class Core {
     }
 
     public void saveNetwork(String bssid, String psk, String pin, String ssid){
+        if (bssid == null || bssid.trim().isEmpty()) return;
         ArrayList<String> nw = new ArrayList<>();
-        nw.add(psk);
-        nw.add(pin);
-        nw.add(ssid);
+        nw.add(psk == null ? "" : psk);
+        nw.add(pin == null ? "" : pin);
+        nw.add(ssid == null ? "" : ssid);
         nw.add(bssid);
         putListString(bssid,nw);
         addSavedNetwork(bssid);
     }
     public ArrayList<ArrayList<String>> getSavedNetworks(){
-        ArrayList<String> bssids = getListString("bssids");
         ArrayList<ArrayList<String>> networks = new ArrayList<>();
-        for (String bssid : bssids) {
-            networks.add(getListString(bssid));
+        for (String bssid : new LinkedHashSet<>(getListString("bssids"))) {
+            if (bssid == null || bssid.isEmpty()) continue;
+            ArrayList<String> network = getListString(bssid);
+            if (network.size() >= 4) networks.add(network);
         }
         return networks;
     }
 
     public void addSavedNetwork(String bssid){
         ArrayList<String> bssids = getListString("bssids");
+        if (bssids.contains(bssid)) return;
         bssids.add(bssid);
         putListString("bssids",bssids);
     }
     public void removeSavedNetwork(String bssid){
         ArrayList<String> bssids = getListString("bssids");
-        bssids.remove(bssid);
+        bssids.removeAll(Collections.singleton(bssid));
         putListString("bssids",bssids);
         remove(bssid);
     }
@@ -229,7 +234,12 @@ public class Core {
         return preferences.getString(key, "");
     }
     public ArrayList<String> getListString(String key) {
-        return new ArrayList<>(Arrays.asList(TextUtils.split(preferences.getString(key, ""), "‚‗‚")));
+        try {
+            return new ArrayList<>(Arrays.asList(TextUtils.split(preferences.getString(key, ""), "‚‗‚")));
+        } catch (RuntimeException e) {
+            logger.writeLine("Unreadable stored value '" + key + "': " + e, 3, LogTool.CORE);
+            return new ArrayList<>();
+        }
     }
 
 
